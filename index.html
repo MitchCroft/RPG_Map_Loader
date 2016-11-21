@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>RPG Map Loader</title>
+
+        <!-- Include Framework Files -->
+
+        <script type="text/javascript" src="JS_Framework/ExtendProperties.js"></script>
+
+        <script type="text/javascript" src="JS_Framework/Math/Vec2.js"></script>    
+        <script type="text/javascript" src="JS_Framework/Math/Mat3.js"></script>    
+
+        <script type="text/javascript" src="JS_Framework/Rendering/Camera.js"></script>
+        <script type="text/javascript" src="JS_Framework/Rendering/Color.js"></script>
+
+        <script type="text/javascript" src="JS_Framework/Management/Input.js"></script>
+        <script type="text/javascript" src="JS_Framework/Management/Graphics.js"></script>
+        <script type="text/javascript" src="JS_Framework/Management/StateManager.js"></script>
+
+        <!--Define the Style for the page to remove borders-->
+        <style type="text/css">
+            /*Remove the top and left whitespace*/
+            * {
+                margin:0; 
+                padding:0;
+            }       
+
+            /*Ensure the screen is fullscreen*/
+            html, body {
+                width:100%;
+                height:100%;
+            }
+
+            /*Remove the scroll bars*/
+            canvas {
+                display: block;
+            }
+        </style>
+    </head>
+
+    <body>
+    <!--<center><canvas></canvas></center>-->
+
+    <!-- Add Map Loader Scripts -->
+
+    <!--<script type="text/javascript" src="Map Loader/*.js"></script>-->
+
+    <script type="text/javascript" src="main.js"></script>
+
+    </body>
+</html>
