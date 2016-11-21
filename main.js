@@ -23,8 +23,8 @@ graphics.setWindowResizeCallback(function(pWidth, pHeight) {
 Input.setCanvas(graphics.canvas);
 
 //Create the input axis
-var VERTICAL_AXIS = new InputAxis("vertical", Keys.S, Keys.W, 2, 1, Keys.UP, Keys.DOWN);
-var HORIZONTAL_AXIS = new InputAxis("horizontal", Keys.D, Keys.A, 2, 1, Keys.RIGHT, Keys.LEFT);
+var VERTICAL_AXIS = new InputAxis("vertical", Keys.S, Keys.W, 0.5, 0.25, Keys.UP, Keys.DOWN);
+var HORIZONTAL_AXIS = new InputAxis("horizontal", Keys.D, Keys.A, 0.5, 0.25, Keys.RIGHT, Keys.LEFT);
 
 //Add the input axis to the Input Manager
 Input.addAxis(VERTICAL_AXIS);
@@ -58,6 +58,9 @@ var fpsSum = 0;
 //Store the number of iterations that have occured in order to take the average
 var fpsIterations = 0;
 
+//Define a temporary speed for the camera to move at
+var CAMERA_MOVE_SPEED = 10;
+
 /*
     updateLoop - Update the input and display the loaded game world
     21/11/2016
@@ -86,8 +89,14 @@ function updateLoop(pDelta) {
         fpsTimer = fpsSum = fpsIterations = 0;
     }
 
+    //Get the movement direction
+    var moveDir = new Vec2(Input.getAxis("horizontal"), Input.getAxis("vertical"));
+
+    //Normalise movement if needed
+    if (moveDir.mag > 1) moveDir.normalize();
+
     //Move the camera around
-    camera.position = new Vec2(Math.sin(Date.now() * 0.001) * 100, Math.cos(Date.now() * 0.001) * 100);
+    camera.position = camera.position.addSet(moveDir.multiSet(CAMERA_MOVE_SPEED));
 
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ////-------------------------------------------Clear Background-------------------------------------------////
