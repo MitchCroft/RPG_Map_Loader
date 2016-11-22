@@ -43,11 +43,12 @@ function TileMapManager(pDisplayTileWidth, pDisplayTileHeight) {
         namedIndicies: [],
 
         //Store the index of the current map that is in use
-        currentMapIndex: 0,
+        currentMapIndex: -1,
 
         //Store the display dimensions for the tiles
         displayDimensions: new Vec2(typeof pDisplayTileWidth === "number" ? pDisplayTileWidth : 10, typeof pDisplayTileHeight === "number" ? pDisplayTileHeight : 10),
 
+        //Highlight debugging information for specific layers
         hightlightLayers: [],
     };
 };
@@ -60,13 +61,363 @@ ExtendProperties(TileMapManager, {
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     /*
+        TileMapManager : displayDimensions - Get the display dimensions that are being used to render tiles to the screen
+        22/11/2016
+
+        @return Vec2 - Returns a Vec2 object with the display dimensions stored inside
+    */
+    get displayDimensions() {
+        return new Vec2(this.__Internal__Dont__Modify__.displayDimensions);
+    },
+
+    /*
+        TileMapManager : displayDimensions - Set the display dimensions that are being used to render tiles to the screen
+        22/11/2016
+
+        @param[in] pDim - A Vec2 object that stores the new rendering dimensions
+    */
+    set displayDimensions(pDim) {
+        //Check the parameter is a Vec2
+        if (!pDim instanceof Vec2)
+            throw new Error("Can not assign the render dimensions to " + pDim + " (Type: '" + typeof pDim + "') Please use a Vec2 object");
+
+        //Copy the values over
+        this.__Internal__Dont__Modify__.displayDimensions.set(pDim);
+    },
+
+    /*
+        TileMapManager : highlightLayers
+        22/11/2016
+
+        @param[in] pIdents - Either a single identifier or an array of identifiers for layers to highlight
+    */
+    set highlightLayers(pIdents) {
+        //Check if the identifier is not an array
+        if (!pIdents instanceof Array)
+            pIdents = [pIdents];
+
+        //Loop through and validate all identifiers
+        for (var i = 0; i < pIdents.length; i++)
+            pIdents[i] = this.validifyLayerIdentifier(pIdents[i], -1);
+    },
+
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /////                                                                                                            ////
+    /////                                               Main Functions                                               ////
+    /////                                                                                                            ////
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    /*
         TileMapManager : validifyLayerIdentifier - Takes an identification value and returns a valid layer index
-        21/11/2016
+        22/11/2016
 
         @param[in] pIdent - The identifier to validate (Number, string or null)
         @param[in] pDefault - The default index to assign if the identifier is invalid
 
         @return number - Returns a whole number that is either the vlaid index or the default
+    */
+    validifyLayerIdentifier: function(pIdent, pDefault) {
+        //Switch on the type of the identifier
+        switch (typeof pIdent) {
+            case "string":
+                //Check for a valid index
+                if (!(pIdent in this.__Internal__Dont__Modify__.loadedMaps[this.__Internal__Dont__Modify__.currentMapIndex].layerNamesToIndex)) {
+                    console.log("Could not find identifier " + pIdent + " in the layer identification list. Default value of " + pDefault + " was assigned");
+                    return pDefault;
+                }
+
+                //Return the found index layer
+                return this.__Internal__Dont__Modify__.loadedMaps[this.__Internal__Dont__Modify__.currentMapIndex].layerNamesToIndex[pIdent];
+                break;
+            case "number":
+                //Round the number off to the closest integral number
+                pIdent = math.round(pIdent);
+
+                //Ensure the index is within range
+                if (pIdent < 0 || pIdent >= this.__Internal__Dont__Modify__.loadedMaps[this.__Internal__Dont__Modify__.currentMapIndex].layers.length) {
+                    console.log("The index value of " + pIdent + " is outside of the valid range for layers on the current map. Default value of " + pDefault + " was assigned");
+                    return pDefault;
+                }
+
+                //Return the identification index
+                return pIdent;
+                break;
+            default:
+                //Type mismatch
+                throw new Error("Value of type " + typeof pIdent + " was used as an identifier for a layer");
+        }
+    },
+
+    /*
+        TileMapManager : addMap - Add a TileMap object to the manager
+        22/11/2016
+
+        @param[in] pMap - The TileMap object to add to the manager
+        @param[in] pIdent - An optional identifier string to use for identifying maps to load
+                            (Default is the index number)
+    */
+    addMap: function(pMap, pIdent) {
+        //Check the map is a TileMap
+        if (!pMap instanceof TileMap)
+            throw new Error("Can not add " + pMap + " (Type: '" + typeof pMap + "') to the Tile Map Manager. Please use a TileMap object");
+
+        //Clean the identifier value
+        if (typeof pIdent !== "string")
+            pIdent = "" + this.__Internal__Dont__Modify__.loadedMaps.length;
+
+        //Check if the identifier is valid
+        if (pIdent in this.__Internal__Dont__Modify__.namedIndicies)
+            throw new Error("Could not use " + pIdent + " as an identifier for the TileMap object being added to the Manager as that identifier is already in use");
+
+        //Add the map to the list of loaded objects
+        this.__Internal__Dont__Modify__.loadedMaps[this.__Internal__Dont__Modify__.loadedMaps.length] = pMap;
+
+        //Assign the identification element the index number
+        this.__Internal__Dont__Modify__.namedIndicies[pIdent] = this.__Internal__Dont__Modify__.loadedMaps.length - 1;
+    },
+
+    /*
+        TileMapManager : setActiveMap - Sets the currently active map in use by the Tile Map Manager
+        22/11/2016
+
+        @param[in] pIdent - The identifier ised to select the map (Either an integral index number for the map
+                            or a string containing the identifier of the map)
+        @param[in] pCallback - A function that can be passed an an object layer for user processing (Optional)
+    */
+    setActiveMap: function(pIdent, pCallback) {
+        //Verify the identifier flag
+        switch (typeof pIdent) {
+            case "string":
+                //Check to see if the identfier is in the map
+                if (!pIdent in this.__Internal__Dont__Modify__.namedIndicies)
+                    throw new Error("Could not set the active map to '" + pIdent + "' as that identifier is not in the list");
+
+                //Convert the identifier to its index
+                pIdent = this.__Internal__Dont__Modify__.namedIndicies[pIdent];
+                break;
+            case "number":
+                //Round to the nearest integral
+                pIdent = Math.round(pIdent);
+
+                //Check the identifier is within the vlaid range
+                if (pIdent < 0 || pIdent >= this.__Internal__Dont__Modify__.loadedMaps.length)
+                    throw new Error("Can not set the active map to " + pIdent + " as that is outside of the useable range");
+                break;
+            default:
+                throw new Error("An unknown identifier was passed in, " + pIdent + " (Type: '" + typeof pIdent + ")");
+        }
+
+        //Set the active map
+        this.__Internal__Dont__Modify__.currentMapIndex = pIdent;
+
+        //Clear the highlight layers identifiers
+        this.__Internal__Dont__Modify__.hightlightLayers = [];
+
+        //If there is a callback pass the information to it
+        if (typeof pCallback === "function") {
+            //Loop through all object layers and call the callback function
+            for (var i = 0; i < this.__Internal__Dont__Modify__.loadedMaps[pIdent].objectLayers.length; i++)
+                pCallback(this.__Internal__Dont__Modify__.loadedMaps[pIdent].objectLayers[i]);
+        }
+    },
+
+    /*
+        TileMapManager : worldPosToTileCoord - Converts a world position to a tile coordinate on the current map
+        22/11/2016
+
+        @param[in] pPos - A Vec2 object holding the world position to convert
+
+        @return Vec2 - Returns a Vec2 object containing the converted tile coordinate
+    */
+    worldPosToTileCoord: function(pPos) {
+        //Ensure there is an active map
+        if (this.__Internal__Dont__Modify__.currentMapIndex < 0)
+            throw new Error("There is no active map. Please set an active map before attempting to convert a world position to tile coordinates");
+
+        //Convert the world position
+        return new Vec2(Math.floor(pPos.x / this.__Internal__Dont__Modify__.loadedMaps[this.__Internal__Dont__Modify__.currentMapIndex].tilewidth),
+            Math.floor(pPos.y / this.__Internal__Dont__Modify__.loadedMaps[this.__Internal__Dont__Modify__.currentMapIndex].tileheight));
+    },
+
+    /*
+        TileMapManager : tileCoordToWorldPos - Converts a tile corrdinate to a world position on the current map
+        22/11/2016
+
+        @param[in] pCoord - A Vec2 object holding the tile coordinate to convert
+
+        @return Vec2 - Returns a vec2 object containing the converted world position
+    */
+    tileCoordToWorldPos: function(pCoord) {
+        //Ensure there is an active map
+        if (this.__Internal__Dont__Modify__.currentMapIndex < 0)
+            throw new Error("There is no active map. Please set an active map before attempting to convert a tile coordinate to a world position");
+
+        //Convert the tile coordinate
+        return new Vec2(pCoord.x * this.__Internal__Dont__Modify__.loadedMaps[this.__Internal__Dont__Modify__.currentMapIndex].tilewidth,
+            pCoord.y * this.__Internal__Dont__Modify__.loadedMaps[this.__Internal__Dont__Modify__.currentMapIndex].tileheight);
+    },
+
+    /*
+        TileMapManager : testTileCollision - Checks the tile corrdinates passed in to see if that tile is blocked
+                                             on specifiable layers
+        22/11/2016
+
+        @param[in] pCoord - A Vec2 object defining the tile coordinate to check
+        @param[in] pIdents - Either a single identifier or an array of identifiers for layers to check collision 
+                             against (Default checks everything)
+
+        @return bool - Returns true if the coordinate is blocked. If coordinate is out of map bounds returns true
+    */
+    testTileCollision: function(pCoord, pIdents) {
+        //Check there is an active map
+        if (this.__Internal__Dont__Modify__.currentMapIndex < 0)
+            throw new Error("Can not check collision as there is nto active map. Please set and active map before checking collision");
+
+        //Get a reference to the current active map
+        var activeMap = this.__Internal__Dont__Modify__.loadedMaps[this.__Internal__Dont__Modify__.currentMapIndex];
+
+        //Check to see if coordinates are within map bounds
+        if (pCoord.x < 0 || pCoord.y < 0 || pCoord.x >= activeMap.width || pCoord.y >= activeMap.height)
+            return true;
+
+        //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        ////------------------------------------------Clean the Identifiers---------------------------------------////
+        //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+        //Check if the identifiers where defined
+        if (pIdents == null) {
+            //Create an array
+            pIdents = [];
+
+            //Add every index into the array
+            for (var i = 0; i < activeMap.layers.length; i++)
+                pIdents[i] = i;
+        }
+
+        //Process defined identifiers
+        else {
+            //If the identifiers are not in an array
+            if (!pIdents instanceof Array)
+                pIdents = [pIdents];
+
+            //Clean all identifiers within the array
+            for (var i = 0; i < pIdents.length; i++)
+                pIdents[i] = this.validifyLayerIdentifier(pIdents[i], -1);
+        }
+
+        //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        ////------------------------------------------Check Collision Data----------------------------------------////
+        //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+        //Loop through all layers and check for collisions
+        for (var i = 0; i < pIdents.length; i++) {
+            //Check if collision data is present at the cooridinate 
+            if (activeMap.layers[pIdents[i]].collisionData[pCoord.y][pCoord.x])
+                return true;
+        }
+
+        //Default no collision
+        return false;
+    },
+
+    /*
+        TileMapManager : testObjectCollision - Checks a defined world space dimensions to see if they collide on 
+                                               specifiable layers
+        22/11/2016
+
+        @param[in] pX - The world X position of the object to test collision for
+        @param[in] pY - The world Y position of the object to test collision for
+        @param[in] pW - The world width of the object to test collision for
+        @param[in] pH - The world height of the object to test collision for
+        @param[in] pIdents - Either a single identifier or an array of identifiers for layers to check collision 
+                             against (Default checks everything)
+
+        @return bool - Returns true if the coordinate is blocked. If coordinate is out of map bounds returns true
+    */
+    testObjectCollision: function(pX, pY, pW, pH, pIdents) {
+        //Check there is an active map
+        if (this.__Internal__Dont__Modify__.currentMapIndex < 0)
+            throw new Error("Can not check collision as there is nto active map. Please set and active map before checking collision");
+
+        //Get a reference to the current active map
+        var activeMap = this.__Internal__Dont__Modify__.loadedMaps[this.__Internal__Dont__Modify__.currentMapIndex];
+
+        //Check to ensure the object is contained by the map, if outside return colliding
+        if (pX < 0 || pX + pW >= activeMap.width * activeMap.tilewidth ||
+            pY < 0 || pY + pH >= activeMap.height * activeMap.tileHeight)
+            return true;
+
+        //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        ////------------------------------------------Clean the Identifiers---------------------------------------////
+        //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+        //Check if the identifiers where defined
+        if (pIdents == null) {
+            //Create an array
+            pIdents = [];
+
+            //Add every index into the array
+            for (var i = 0; i < activeMap.layers.length; i++)
+                pIdents[i] = i;
+        }
+
+        //Process defined identifiers
+        else {
+            //If the identifiers are not in an array
+            if (!pIdents instanceof Array)
+                pIdents = [pIdents];
+
+            //Clean all identifiers within the array
+            for (var i = 0; i < pIdents.length; i++)
+                pIdents[i] = this.validifyLayerIdentifier(pIdents[i], -1);
+        }
+
+        //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        ////------------------------------------------Find Check Positions----------------------------------------////
+        //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+        //Get the object collision poll positions
+        var pollPositions = [
+            { x: pX, y: pY },
+            { x: pX + pW / 2, y: pY },
+            { x: pX + pW, y: pY },
+            { x: pX + pW, y: pY + pH / 2 },
+            { x: pX + pW, y: pY + pH },
+            { x: pX + pW / 2, y: pY + pH },
+            { x: pX, y: pY + pH },
+            { x: pX, y: pY + pH / 2 } { x: pX }
+        ];
+
+        //Convert the positions to tile coordinates
+        for (var i = 0; i < pollPositions.length; i++)
+            pollPositions[i] = this.worldPosToTileCoord(pollPositions[i]);
+
+        //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        ////------------------------------------------Check Collision Data----------------------------------------////
+        //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+        //Loop through all layers and check for collisions
+        for (var i = 0; i < pIdents.length; i++) {
+            //Loop through all polling positions
+            for (var j = 0; j < pollPositions.length; j++) {
+                //Check if collision data is present at the cooridinate 
+                if (activeMap.layers[pIdents[i]].collisionData[pollPositions[j].y][pollPositions[j].x])
+                    return true;
+            }
+        }
+
+        //Return no collision found
+        return false;
+    },
+
+    /*
+        TileMapManager : draw - Renders the currently active map as seen by a passed in camera
+        22/11/2016
+
+        @param[in] pCtx - The context of the canvas to render to
+        @param[in] pCam - The Camera object being used to view the map
+        @param[in] pIdents - Either a single identifier or an array of identifiers for layers to render (Default 
+                             renders everything)
     */
 });
 
@@ -109,84 +460,6 @@ function MapCell(pX, pY, pWidth, pHeight) {
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /*
- *      Name: Layer
- *      Author: Mitchell Croft
- *      Date: 21/11/2016
- *
- *      Version: 1.0
- *
- *      Purpose:
- *      Store the rendering information for a single layer of a Tiled map file
- **/
-
-/*
-    Layer : Constructor -Initialise with default values
-    21/11/2016
-*/
-function Layer() {
-    //Store an array of MapCell objects that make up this layer
-    this.data = [];
-
-    //Store an array of collision data about this layer
-    this.collisionData = [];
-
-    //Store the rendering values of the layer
-    this.name = "UNNAMED";
-    this.visible = false;
-    this.opacity = 0;
-};
-
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-/////                                                                                                            ////
-/////                                                 Object Definition                                          ////
-/////                                                                                                            ////
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-/*
- *      Name: TileSet
- *      Author: Mitchell Croft
- *      Date: 21/11/2016
- *
- *      Version: 1.0
- *
- *      Purpose:
- *      Load and save information relating to the tilesets used to render
- *      a Tiled map
- **/
-
-/*
-    TileSet : Constructor - Initialise with default values
-    21/11/2016
-*/
-function TileSet() {
-    //Store the image used to store the tileset
-    this.image = null;
-
-    //Store padding/spacing information
-    this.margin = 0;
-    this.spacing = 0;
-
-    //Store the tileset dimensions
-    this.imageWidth = 0;
-    this.imageHeight = 0;
-    this.tileWidth = 0;
-    this.tileHeight = 0;
-
-    //Store the tile layout values
-    this.firstID = 0;
-    this.columns = 0;
-    this.tileCount = 0;
-    this.tileWidth = 0;
-    this.tileHeight = 0;
-};
-
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-/////                                                                                                            ////
-/////                                                 Object Definition                                          ////
-/////                                                                                                            ////
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-/*
  *      Name: TileMap
  *      Author: Mitchell Croft
  *      Date: 21/11/2016
@@ -194,7 +467,8 @@ function TileSet() {
  *      Requires:
  *      ExtendProperties.js
  *
- *      Version: 1.0
+ *      Version: 2.0
+ *      Reads JSON files from a location and pulls the required data
  *
  *      Purpose:
  *      Load the map information from a Tiled Map Editors 
@@ -205,21 +479,16 @@ function TileSet() {
     TileMap : Constructor - Intitialise with default values or load 
                             a map file
     21/11/2016
-
-    @parma[in] pFilePath - The filepath to the .json file to load
 */
-function TileMap(pFilePath) {
+function TileMap() {
     //Create an array for the differemt layers of the map
     this.layers = [];
 
     //Store the index values of the names of the layers in the map
     this.layerNamesToIndex = [];
 
-    //Store the objects found on the map
+    //Store the objects found on the map, keyed at the name of the layer they were stored on
     this.objectLayers = [];
-
-    //Store the names of the object layers (For supplying to callback functions)
-    this.objectLayerIdentifiers = [];
 
     //Store the different tilesets used by the TileMap
     this.tilesets = [];
@@ -231,10 +500,6 @@ function TileMap(pFilePath) {
     //Store the tile dimensions
     this.tileWidth = 0;
     this.tileHeight = 0;
-
-    //Check if the file path is a string
-    if (typeof pFilePath === "string")
-        this.loadMap(pFilePath);
 };
 
 ExtendProperties(TileMap, {
@@ -272,11 +537,15 @@ ExtendProperties(TileMap, {
         //Loop while waiting for a reply
         while (content === null);
 
-        //If the response is not an XML document throw an error
-        if (content === "") return;
+        //If the response came back with nothing throw an error
+        if (content === "") throw new Error("Could not load the information from " + pFilePath);
 
         //Parse the recieved JSON information
         var mapObj = JSON.parse(content);
+
+        //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        ////--------------------------------------Load Base Map Information---------------------------------------////
+        //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
         //Read the map dimensions
         this.width = mapObj.width;
@@ -286,134 +555,126 @@ ExtendProperties(TileMap, {
         this.tileWidth = mapObj.tilewidth;
         this.tileHeight = mapObj.tileheight;
 
-        //Load the tilesets in use
-        this.tilesets = [];
-        for (var i = 0; i < mapObj.tilesets.length; i++) {
-            //Create a new tileset object
-            var set = new TileSet();
+        //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        ////---------------------------------------Load Tileset Information---------------------------------------////
+        //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-            //Load padding information
-            set.spacing = mapObj.tilesets[i].spacing;
-            set.margin = mapObj.tilesets[i].margin;
+        //Assign all of the tilesets to this map object
+        this.tilesets = mapObj.tilesets;
 
-            //Load image dimensions
-            set.imageWidth = mapObj.tilesets[i].imagewidth;
-            set.imageHeight = mapObj.tilesets[i].imageheight;
-            set.tileWidth = mapObj.tilesets[i].tilewidth;
-            set.tileHeight = mapObj.tilesets[i].tileheight;
-
-            //Load the tile layout values
-            set.firstID = mapObj.tilesets[i].firstgid;
-            set.columns = mapObj.tilesets[i].columns;
-            set.tileCount = mapObj.tilesets[i].tilecount;
-
-            //Check for image callback
+        //Loop through and load all of the images
+        for (var i = 0; i < this.tilesets.length; i++) {
+            //Check if there is a image loading callback assigned
             if (typeof pImageCallback === "function")
-                set.image = pImageCallback(mapObj.tilesets[i].image);
+                this.tilesets[i].image = pImageCallback(this.tilesets[i].image);
 
-            //Create a new image object
+            //Otherwise create a new image element and assign the source
             else {
-                set.image = new Image();
-                set.image.src = mapObj.tilesets[i].image;
-            }
+                //Store the source
+                var src = this.tilesets[i].image;
 
-            //Store the tilset in the array
-            this.tilesets[i] = set;
+                //Create the new image object
+                this.tilesets[i].image = new Image();
+
+                //Assign the source to the image
+                this.tilesets[i].image.src = src;
+            }
         }
 
-        //Create an array to hold the loaded Map objects
+        //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        ////----------------------------------------Load Layers Information---------------------------------------////
+        //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+        //Clear all current layer information
+        this.layers = [];
+        this.layerNamesToIndex = [];
         this.objectLayers = [];
 
-        //Create an array to hold the identifiers of the objects layers
-        this.objectLayerIdentifiers = [];
-
-        //Load the layer information
-        this.layers = [];
+        //Loop through all layers and find the required layers
         for (var i = 0; i < mapObj.layers.length; i++) {
-            //Switch based on the layers type 
+            //Switch on the type of layer that is identified
             switch (mapObj.layers[i].type) {
                 case "tilelayer":
-                    //Create a new layer object
-                    var set = new Layer();
+                    //Store the index this layer is being saved at
+                    var ind = this.layers.length;
 
-                    //Load rendering values
-                    set.name = mapObj.layers[i].name;
-                    set.visible = mapObj.layers[i].visible;
-                    set.opacity = mapObj.layers[i].opacity;
+                    //Assign this layer object to the next available layer index
+                    this.layers[ind] = mapObj.layers[i];
 
-                    //Load data values
+                    //Check if this name already exists
+                    if (this.layers[ind].name in this.layerNamesToIndex)
+                        console.log("WARNING: Two tile layers with the same names ('" + this.layers[ind].name + "') were loaded. Name identifiers may not select the desired layer for rendering");
+
+                    //Store the index of this named layer
+                    this.layerNamesToIndex[this.layers[ind].name] = ind;
+
+                    //Delete the offset values (They will just hurt me)
+                    delete this.layers[ind].x;
+                    delete this.layers[ind].y;
+
+                    //Store the data values in a temporary location
+                    var data = this.layers[ind].data;
+
+                    //Add the collision data array to the layer
+                    this.layers[ind].collisionData = [];
+
+                    //Process the data values into quick readable formats
                     var tileProg = 0;
                     for (var y = 0; y < this.height; y++) {
                         //Create a new array for this line of data
-                        set.data[y] = [];
+                        this.layers[ind].data[y] = [];
 
                         //Create a new array for this line of collision data
-                        set.collisionData[y] = [];
+                        this.layers[ind].collisionData[y] = [];
 
                         //Loop through all values on this line
                         for (var x = 0; x < this.width; x++) {
-                            //Get the tile index
-                            var tileIndex = mapObj.layers[i].data[tileProg++];
+                            //Get the tile index 
+                            var tileIndex = data[tileProg++];
 
-                            //Find the tileset the index belongs to
+                            //Find the tileset that this index belongs to
                             var foundTileset = -1;
                             for (var j = 0; j < this.tilesets.length; j++) {
-                                //Check if the tile index is within the tilesets range
-                                if (tileIndex >= this.tilesets[j].firstID && tileIndex < this.tilesets[j].firstID + this.tilesets[j].tileCount) {
+                                //Check the tile index is within the tilesets range
+                                if (tileIndex >= this.tilesets[j].firstgid && tileIndex < this.tilesets[j].firstgid + this.tilesets[i].tilecount) {
                                     foundTileset = j;
                                     break;
                                 }
                             }
 
-                            //Ensure the tileset was found
+                            //Ensure that a tileset was found
                             if (foundTileset >= 0) {
-                                //Subtract the first ID to get the index onto the tilesheet
-                                tileIndex -= this.tilesets[foundTileset].firstID;
+                                //Subtract the first ID to get index into tileset
+                                tileIndex -= this.tilesets[foundTileset].firstgid;
 
                                 //Create a new Map Cell object
                                 var cell = new MapCell();
 
                                 //Assign the source image area
-                                cell.w = this.tilesets[foundTileset].tileWidth;
-                                cell.h = this.tilesets[foundTileset].tileHeight;
+                                cell.w = this.tilesets[foundTileset].tilewidth;
+                                cell.h = this.tilesets[foundTileset].tileheight;
                                 cell.x = this.tilesets[foundTileset].margin + (tileIndex % this.tilesets[foundTileset].columns) * (cell.w + this.tilesets[foundTileset].spacing);
                                 cell.y = this.tilesets[foundTileset].margin + Math.floor(tileIndex / this.tilesets[foundTileset].columns) * (cell.h + this.tilesets[foundTileset].spacing);
 
                                 //Assign the used tileset index
                                 cell.tilesetIndex = foundTileset;
 
-                                //Add cell to layer map
-                                set.data[y][x] = cell;
+                                //Add the cell to the layer map
+                                this.layers[ind].data[y][x] = cell;
                             }
 
-                            //Through not found error
-                            else if (tileIndex != 0) throw new Error("Unable to find the tileset used for the Map Cell with TileID of " + tileIndex);
+                            //Throw an error if there is a tileindex issue
+                            else if (tileIndex != 0) throw new Error("Unable to find the tileset used for the Map Cell with TileID of " + tileIndex + ". This occured on layer " + ind + " ('" + this.layers[ind].name + "')");
 
                             //Set the collision data
-                            set.collisionData[y][x] = (set.data[y][x] instanceof MapCell ? 1 : 0);
+                            this.layers[ind].collisionData[y][x] = (this.layers[ind].data[y][x] instanceof MapCell ? 1 : 0);
                         }
                     }
 
-                    //Add the layer to the TileMap
-                    this.layers[this.layers.length] = set;
-
-                    //Check the layer name duplicate 
-                    if (set.name in this.layerNamesToIndex)
-                        console.log("Warning: Two layers with the same names were identified in the map being loaded. Name identifiers may not select the desired layer for rendering");
-
-                    //Add the name to the index map
-                    this.layerNamesToIndex[set.name] = this.layers.length - 1;
                     break;
                 case "objectgroup":
-                    //Add an array for the current object layer
-                    this.objectLayers[this.objectLayers.length] = [];
-
-                    //Set the object layer identifier
-                    this.objectLayerIdentifiers[this.objectLayerIdentifiers.length] = mapObj.layers[i].name;
-
-                    //Loop through all of this layers objects, add objects to the current object layer
-                    for (var j = 0; j < mapObj.layers[i].objects.length; j++)
-                        this.objectLayers[this.objectLayers.length - 1].push(mapObj.layers[i].objects[j]);
+                    //Assign this layer object to the  object layers map
+                    this.objectLayers[this.objectLayers.length] = mapObj.layers[i];
                     break;
             }
         }

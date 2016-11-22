@@ -23,7 +23,7 @@ graphics.setWindowResizeCallback(function(pWidth, pHeight) {
 Input.setCanvas(graphics.canvas);
 
 //Create the input axis
-var VERTICAL_AXIS = new InputAxis("vertical", Keys.S, Keys.W, 0.5, 0.25, Keys.UP, Keys.DOWN);
+var VERTICAL_AXIS = new InputAxis("vertical", Keys.S, Keys.W, 0.5, 0.25, Keys.DOWN, Keys.UP);
 var HORIZONTAL_AXIS = new InputAxis("horizontal", Keys.D, Keys.A, 0.5, 0.25, Keys.RIGHT, Keys.LEFT);
 
 //Add the input axis to the Input Manager
