@@ -40,6 +40,33 @@ graphics.addCanvasResizeEvent(function(pWidth, pHeight) {
     camera.canvasDimensions = new Vec2(pWidth, pHeight);
 });
 
+/*--------------------Map--------------------*/
+//Create the Map Manager
+var mapManager = new TileMapManager(15, 10);
+
+//Add the test map to the manager
+mapManager.addMap(new TileMap().loadMap("TestMap.json", function(pFilePath) {
+    return graphics.loadImage(pFilePath);
+}), "Main");
+
+//Set the active Map
+mapManager.setActiveMap("Main", function(pObjLayer) {
+    //Loop through the objects that are within the map
+    for (var i = 0; i < pObjLayer.objects.length; i++) {
+        //Switch on the type of the object
+        switch (pObjLayer.objects[i].type) {
+            case "Spawn":
+                //Move the camera to this position
+                camera.position.x = pObjLayer.objects[i].x;
+                camera.position.y = pObjLayer.objects[i].y;
+                break;
+            default:
+                console.log("Object layer " + pObjLayer.name + " logged the object " + pObjLayer.objects[i].name);
+                break;
+        }
+    }
+});
+
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /////                                                                                                            ////
 /////                                         Update Loop Functionality                                          ////
@@ -113,11 +140,10 @@ function updateLoop(pDelta) {
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     //Set the cameras projection matrix as the canvas'
-    graphics.transform = camera.projectionView;
+    //graphics.transform = camera.projectionView;
 
-    //Draw random square
-    graphics.draw.fillStyle = "green";
-    graphics.draw.fillRect(-50, -50, 50, 50);
+    //Render the map display
+    mapManager.draw(graphics.draw, camera);
 
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ////-------------------------------------------Draw UI Elements-------------------------------------------////

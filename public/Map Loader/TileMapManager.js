@@ -337,7 +337,7 @@ ExtendProperties(TileMapManager, {
     testObjectCollision: function(pX, pY, pW, pH, pIdents) {
         //Check there is an active map
         if (this.__Internal__Dont__Modify__.currentMapIndex < 0)
-            throw new Error("Can not check collision as there is nto active map. Please set and active map before checking collision");
+            throw new Error("Can not check collision as there is no active map. Please set and active map before checking collision");
 
         //Get a reference to the current active map
         var activeMap = this.__Internal__Dont__Modify__.loadedMaps[this.__Internal__Dont__Modify__.currentMapIndex];
@@ -385,7 +385,7 @@ ExtendProperties(TileMapManager, {
             { x: pX + pW, y: pY + pH },
             { x: pX + pW / 2, y: pY + pH },
             { x: pX, y: pY + pH },
-            { x: pX, y: pY + pH / 2 } { x: pX }
+            { x: pX, y: pY + pH / 2 }
         ];
 
         //Convert the positions to tile coordinates
@@ -419,6 +419,139 @@ ExtendProperties(TileMapManager, {
         @param[in] pIdents - Either a single identifier or an array of identifiers for layers to render (Default 
                              renders everything)
     */
+    draw: function(pCtx, pCam, pIdents) {
+        //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        ////-----------------------------------------Check Critical Values----------------------------------------////
+        //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        //Check there is an active map
+        if (this.__Internal__Dont__Modify__.currentMapIndex < 0)
+            throw new Error("Can not draw as there is no active map. Please set and active map before attempting to draw");
+
+        //Check that the context is valid
+        else if (!pCtx instanceof CanvasRenderingContext2D)
+            throw new Error("Can not draw using " + pCtx + " (Type '" + typeof pCtx + "') as the 2D Context. Please use a 2D HTML5 canvas context object");
+
+        //Check the camera is valid
+        else if (!pCam instanceof Camera)
+            throw new Error("Can not draw using " + pCam + " (Type '" + typeof pCam + "') as the Camera. Please use a Camera object");
+
+        //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        ////------------------------------------------Clean the Identifiers---------------------------------------////
+        //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+        //Check if the identifiers where defined
+        if (pIdents == null) {
+            //Create an array
+            pIdents = [];
+
+            //Add every index into the array
+            for (var i = 0; i < activeMap.layers.length; i++)
+                pIdents[i] = i;
+        }
+
+        //Process defined identifiers
+        else {
+            //If the identifiers are not in an array
+            if (!pIdents instanceof Array)
+                pIdents = [pIdents];
+
+            //Clean all identifiers within the array
+            for (var i = 0; i < pIdents.length; i++)
+                pIdents[i] = this.validifyLayerIdentifier(pIdents[i], -1);
+        }
+
+        //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        ////------------------------------------------Find The Area To Draw---------------------------------------////
+        //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+        //Get the projection view matrix from the Camera
+        var projView = pCam.projectionView;
+
+        //Store the inverse of projection view
+        var projViewInv = projView.inversed;
+
+        //Get the canvas area from the camera
+        var renderArea = pCamera.canvasDimensions;
+
+        //Get the corners of the canvas into world coordinates
+        var canvasWorldCorners = [projViewInv.multiVec(new Vec2(0, 0)), projViewInv.multiVec(new Vec2(renderArea.x, 0)),
+            projViewInv.multiVec(new Vec2(0, renderArea.y)), projViewInv.multiVec(new Vec2(renderArea.x, renderArea.y))
+        ];
+
+        //Store the min/max points of canvas points
+        var drawMin = new Vec2(Number.MAX_VALUE),
+            drawMax = new Vec2(Number.MIN_VALUE);
+
+        //Loop through the canvas world points and find min/max
+        for (var i = 0; i < canvasWorldCorners.length; i++) {
+            //Check X Axis
+            if (canvasWorldCorners[i].x < drawMin.x) drawMin.x = canvasWorldCorners[i].x;
+            if (canvasWorldCorners[i].x > drawMax.x) drawMax.x = canvasWorldCorners[i].x;
+
+            //Check Y Axis
+            if (canvasWorldCorners[i].y < drawMin.y) drawMin.y = canvasWorldCorners[i].y;
+            if (canvasWorldCorners[i].y > drawMax.y) drawMax.y = canvasWorldCorners[i].y;
+        }
+
+        //Convert the min/max world points into tile coords
+        drawMin = this.worldPosToTileCoord(drawMin);
+        drawMax = this.worldPosToTileCoord(drawMax);
+
+        //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        ////---------------------------------------------Draw The Tiles-------------------------------------------////
+        //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+        //Set the transform used to draw
+        pCtx.setTransform(projView.data[0][0], projView.data[0][1], projView.data[1][0], projView.data[1][1], projView.data[2][0], projView.data[2][1]);
+
+        //Get a reference to the current map
+        var curMap = this.__Internal__Dont__Modify__.loadedMaps[this.__Internal__Dont__Modify__.currentMapIndex];
+
+        //Loop through the ID layers to draw
+        for (var i = 0; i < pIdents.length; i++) {
+            //Get the current layer ID
+            var ID = pIdents[i];
+
+            //Check if this layer is visible
+            if (!curMap.layers[ID].visible) continue;
+
+            //Set the opacity level
+            pCtx.globalAlpha = curMap.layers[ID].opacity;
+
+            //Loop through the Y axis cells to draw
+            for (var y = drawMin.y; y <= drawMax.y; y++) {
+                //Check the Y coord is valid
+                if (y < 0 || y >= curMap.height) continue;
+
+                //Loop through the X axis cells to draw
+                for (var x = drawMin.x; x <= drawMax.x; x++) {
+                    //Check the X coord is valid
+                    if (x < 0 || x >= curMap.width) continue;
+
+                    //Get the MapCell for this location
+                    var cell = curMap.layers[ID].data[y][x];
+
+                    //Check there is a cell to draw
+                    if (!cell instanceof MapCell) continue;
+
+                    //Draw the tile
+                    pCtx.drawImage(curMap.tilesets[cell.tilesetIndex].image,
+                        cell.x, cell.y, cell.w, cell.h,
+                        x * curMap.tileWidth, y * curMap.tileHeight, curMap.tileWidth, curMap.tileHeight);
+                }
+            }
+        }
+
+        //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        ////----------------------------------------Reset Rendering Values----------------------------------------////
+        //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+        //Reset global alpha
+        pCtx.globalAlpha = 1;
+
+        //Reset the transform
+        pCtx.setTransform(1, 0, 0, 1, 0, 0);
+    },
 });
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -529,16 +662,24 @@ ExtendProperties(TileMap, {
         };
 
         //Open the connection request
-        httpReq.open("GET", pFilepath, true);
+        httpReq.open("GET", pFilePath, true);
 
         //Send the request
         httpReq.send();
 
+        //Record the starting time
+        var startTime = Date.now();
+
         //Loop while waiting for a reply
-        while (content === null);
+        while (content === null) {
+            //If 5 seconds pass then force an exit
+            if (Date.now() - startTime >= 5000)
+                content = "";
+        }
 
         //If the response came back with nothing throw an error
-        if (content === "") throw new Error("Could not load the information from " + pFilePath);
+        if (content === "")
+            throw new Error("Could not load the information from " + pFilePath);
 
         //Parse the recieved JSON information
         var mapObj = JSON.parse(content);
