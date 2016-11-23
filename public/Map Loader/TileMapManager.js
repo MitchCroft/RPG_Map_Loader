@@ -235,8 +235,8 @@ ExtendProperties(TileMapManager, {
             throw new Error("There is no active map. Please set an active map before attempting to convert a world position to tile coordinates");
 
         //Convert the world position
-        return new Vec2(Math.floor(pPos.x / this.__Internal__Dont__Modify__.loadedMaps[this.__Internal__Dont__Modify__.currentMapIndex].tilewidth),
-            Math.floor(pPos.y / this.__Internal__Dont__Modify__.loadedMaps[this.__Internal__Dont__Modify__.currentMapIndex].tileheight));
+        return new Vec2(Math.floor(pPos.x / this.__Internal__Dont__Modify__.loadedMaps[this.__Internal__Dont__Modify__.currentMapIndex].tileWidth),
+            Math.floor(pPos.y / this.__Internal__Dont__Modify__.loadedMaps[this.__Internal__Dont__Modify__.currentMapIndex].tileHeight));
     },
 
     /*
@@ -253,8 +253,8 @@ ExtendProperties(TileMapManager, {
             throw new Error("There is no active map. Please set an active map before attempting to convert a tile coordinate to a world position");
 
         //Convert the tile coordinate
-        return new Vec2(pCoord.x * this.__Internal__Dont__Modify__.loadedMaps[this.__Internal__Dont__Modify__.currentMapIndex].tilewidth,
-            pCoord.y * this.__Internal__Dont__Modify__.loadedMaps[this.__Internal__Dont__Modify__.currentMapIndex].tileheight);
+        return new Vec2(pCoord.x * this.__Internal__Dont__Modify__.loadedMaps[this.__Internal__Dont__Modify__.currentMapIndex].tileWidth,
+            pCoord.y * this.__Internal__Dont__Modify__.loadedMaps[this.__Internal__Dont__Modify__.currentMapIndex].tileHeight);
     },
 
     /*
@@ -439,13 +439,16 @@ ExtendProperties(TileMapManager, {
         ////------------------------------------------Clean the Identifiers---------------------------------------////
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+        //Get a reference to the current map
+        var curMap = this.__Internal__Dont__Modify__.loadedMaps[this.__Internal__Dont__Modify__.currentMapIndex];
+
         //Check if the identifiers where defined
         if (pIdents == null) {
             //Create an array
             pIdents = [];
 
             //Add every index into the array
-            for (var i = 0; i < activeMap.layers.length; i++)
+            for (var i = 0; i < curMap.layers.length; i++)
                 pIdents[i] = i;
         }
 
@@ -471,7 +474,7 @@ ExtendProperties(TileMapManager, {
         var projViewInv = projView.inversed;
 
         //Get the canvas area from the camera
-        var renderArea = pCamera.canvasDimensions;
+        var renderArea = pCam.canvasDimensions;
 
         //Get the corners of the canvas into world coordinates
         var canvasWorldCorners = [projViewInv.multiVec(new Vec2(0, 0)), projViewInv.multiVec(new Vec2(renderArea.x, 0)),
@@ -504,9 +507,6 @@ ExtendProperties(TileMapManager, {
         //Set the transform used to draw
         pCtx.setTransform(projView.data[0][0], projView.data[0][1], projView.data[1][0], projView.data[1][1], projView.data[2][0], projView.data[2][1]);
 
-        //Get a reference to the current map
-        var curMap = this.__Internal__Dont__Modify__.loadedMaps[this.__Internal__Dont__Modify__.currentMapIndex];
-
         //Loop through the ID layers to draw
         for (var i = 0; i < pIdents.length; i++) {
             //Get the current layer ID
@@ -532,12 +532,12 @@ ExtendProperties(TileMapManager, {
                     var cell = curMap.layers[ID].data[y][x];
 
                     //Check there is a cell to draw
-                    if (!cell instanceof MapCell) continue;
+                    if (cell == null) continue;
 
                     //Draw the tile
                     pCtx.drawImage(curMap.tilesets[cell.tilesetIndex].image,
                         cell.x, cell.y, cell.w, cell.h,
-                        x * curMap.tileWidth, y * curMap.tileHeight, curMap.tileWidth, curMap.tileHeight);
+                        x * curMap.tileWidth - 1, y * curMap.tileHeight - 1, curMap.tileWidth + 2, curMap.tileHeight + 2);
                 }
             }
         }
@@ -649,6 +649,9 @@ ExtendProperties(TileMap, {
         @return this - Returns itself once the function has completed                                   
     */
     loadMap: function(pFilePath, pImageCallback) {
+        //Store a reference to the current TileMap
+        var that = this;
+
         //Create a container for the return XML results
         var content = null;
 
@@ -659,6 +662,151 @@ ExtendProperties(TileMap, {
         httpReq.onload = function() {
             //Set the content 
             content = (httpReq.status === 200 && httpReq.readyState === 4 ? httpReq.responseText : "");
+
+            //Check if the content was loaded
+            if (content === "") throw new Error("Unable to load the content found at " + pFilePath);
+
+            //Parse the recieved JSON information
+            var mapObj = JSON.parse(content);
+
+            //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            ////--------------------------------------Load Base Map Information---------------------------------------////
+            //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+            //Read the map dimensions
+            that.width = mapObj.width;
+            that.height = mapObj.height;
+
+            //Read the tile dimensions
+            that.tileWidth = mapObj.tilewidth;
+            that.tileHeight = mapObj.tileheight;
+
+            //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            ////---------------------------------------Load Tileset Information---------------------------------------////
+            //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+            //Assign all of the tilesets to this map object
+            that.tilesets = mapObj.tilesets;
+
+            //Loop through and load all of the images
+            for (var i = 0; i < that.tilesets.length; i++) {
+                //Check if there is a image loading callback assigned
+                if (typeof pImageCallback === "function")
+                    that.tilesets[i].image = pImageCallback(that.tilesets[i].image);
+
+                //Otherwise create a new image element and assign the source
+                else {
+                    //Store the source
+                    var src = that.tilesets[i].image;
+
+                    //Create the new image object
+                    that.tilesets[i].image = new Image();
+
+                    //Assign the source to the image
+                    that.tilesets[i].image.src = src;
+                }
+            }
+
+            //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            ////----------------------------------------Load Layers Information---------------------------------------////
+            //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+            //Clear all current layer information
+            that.layers = [];
+            that.layerNamesToIndex = [];
+            that.objectLayers = [];
+
+            //Loop through all layers and find the required layers
+            for (var i = 0; i < mapObj.layers.length; i++) {
+                //Switch on the type of layer that is identified
+                switch (mapObj.layers[i].type) {
+                    case "tilelayer":
+                        //Store the index this layer is being saved at
+                        var ind = that.layers.length;
+
+                        //Assign this layer object to the next available layer index
+                        that.layers[ind] = mapObj.layers[i];
+
+                        //Check if this name already exists
+                        if (that.layers[ind].name in that.layerNamesToIndex)
+                            console.log("WARNING: Two tile layers with the same names ('" + that.layers[ind].name + "') were loaded. Name identifiers may not select the desired layer for rendering");
+
+                        //Store the index of this named layer
+                        that.layerNamesToIndex[that.layers[ind].name] = ind;
+
+                        //Delete the offset values (They will just hurt me)
+                        delete that.layers[ind].x;
+                        delete that.layers[ind].y;
+
+                        //Store the data values in a temporary location
+                        var data = that.layers[ind].data;
+
+                        //Wipe the reference to the previous data
+                        that.layers[ind].data = [];
+
+                        //Add the collision data array to the layer
+                        that.layers[ind].collisionData = [];
+
+                        //Process the data values into quick readable formats
+                        var tileProg = 0;
+                        for (var y = 0; y < that.height; y++) {
+                            //Create a new array for this line of data
+                            that.layers[ind].data[y] = [];
+
+                            //Create a new array for this line of collision data
+                            that.layers[ind].collisionData[y] = [];
+
+                            //Loop through all values on this line
+                            for (var x = 0; x < that.width; x++) {
+                                //Get the tile index 
+                                var tileIndex = data[tileProg++];
+
+                                //Find the tileset that this index belongs to
+                                var foundTileset = -1;
+                                for (var j = 0; j < that.tilesets.length; j++) {
+                                    //Check the tile index is within the tilesets range
+                                    if (tileIndex >= that.tilesets[j].firstgid && tileIndex < that.tilesets[j].firstgid + that.tilesets[j].tilecount) {
+                                        foundTileset = j;
+                                        break;
+                                    }
+                                }
+
+                                //Ensure that a tileset was found
+                                if (foundTileset >= 0) {
+                                    //Subtract the first ID to get index into tileset
+                                    tileIndex -= that.tilesets[foundTileset].firstgid;
+
+                                    //Create a new Map Cell object
+                                    var cell = new MapCell();
+
+                                    //Assign the source image area
+                                    cell.w = that.tilesets[foundTileset].tilewidth;
+                                    cell.h = that.tilesets[foundTileset].tileheight;
+                                    cell.x = that.tilesets[foundTileset].margin + (tileIndex % that.tilesets[foundTileset].columns) * (cell.w + that.tilesets[foundTileset].spacing);
+                                    cell.y = that.tilesets[foundTileset].margin + Math.floor(tileIndex / that.tilesets[foundTileset].columns) * (cell.h + that.tilesets[foundTileset].spacing);
+
+                                    //Assign the used tileset index
+                                    cell.tilesetIndex = foundTileset;
+
+                                    //Add the cell to the layer map
+                                    that.layers[ind].data[y][x] = cell;
+                                }
+
+                                //Throw an error if there is a tileindex issue
+                                else if (tileIndex != 0) throw new Error("Unable to find the tileset used for the Map Cell with TileID of " + tileIndex + ". This occured on layer " + ind + " ('" + that.layers[ind].name + "')");
+
+                                //Set the collision data
+                                that.layers[ind].collisionData[y][x] = (that.layers[ind].data[y][x] instanceof MapCell ? 1 : 0);
+                            }
+                        }
+
+                        break;
+                    case "objectgroup":
+                        //Assign this layer object to the  object layers map
+                        that.objectLayers[that.objectLayers.length] = mapObj.layers[i];
+                        break;
+                }
+            }
         };
 
         //Open the connection request
@@ -666,159 +814,6 @@ ExtendProperties(TileMap, {
 
         //Send the request
         httpReq.send();
-
-        //Record the starting time
-        var startTime = Date.now();
-
-        //Loop while waiting for a reply
-        while (content === null) {
-            //If 5 seconds pass then force an exit
-            if (Date.now() - startTime >= 5000)
-                content = "";
-        }
-
-        //If the response came back with nothing throw an error
-        if (content === "")
-            throw new Error("Could not load the information from " + pFilePath);
-
-        //Parse the recieved JSON information
-        var mapObj = JSON.parse(content);
-
-        //////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        ////--------------------------------------Load Base Map Information---------------------------------------////
-        //////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-        //Read the map dimensions
-        this.width = mapObj.width;
-        this.height = mapObj.height;
-
-        //Read the tile dimensions
-        this.tileWidth = mapObj.tilewidth;
-        this.tileHeight = mapObj.tileheight;
-
-        //////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        ////---------------------------------------Load Tileset Information---------------------------------------////
-        //////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-        //Assign all of the tilesets to this map object
-        this.tilesets = mapObj.tilesets;
-
-        //Loop through and load all of the images
-        for (var i = 0; i < this.tilesets.length; i++) {
-            //Check if there is a image loading callback assigned
-            if (typeof pImageCallback === "function")
-                this.tilesets[i].image = pImageCallback(this.tilesets[i].image);
-
-            //Otherwise create a new image element and assign the source
-            else {
-                //Store the source
-                var src = this.tilesets[i].image;
-
-                //Create the new image object
-                this.tilesets[i].image = new Image();
-
-                //Assign the source to the image
-                this.tilesets[i].image.src = src;
-            }
-        }
-
-        //////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        ////----------------------------------------Load Layers Information---------------------------------------////
-        //////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-        //Clear all current layer information
-        this.layers = [];
-        this.layerNamesToIndex = [];
-        this.objectLayers = [];
-
-        //Loop through all layers and find the required layers
-        for (var i = 0; i < mapObj.layers.length; i++) {
-            //Switch on the type of layer that is identified
-            switch (mapObj.layers[i].type) {
-                case "tilelayer":
-                    //Store the index this layer is being saved at
-                    var ind = this.layers.length;
-
-                    //Assign this layer object to the next available layer index
-                    this.layers[ind] = mapObj.layers[i];
-
-                    //Check if this name already exists
-                    if (this.layers[ind].name in this.layerNamesToIndex)
-                        console.log("WARNING: Two tile layers with the same names ('" + this.layers[ind].name + "') were loaded. Name identifiers may not select the desired layer for rendering");
-
-                    //Store the index of this named layer
-                    this.layerNamesToIndex[this.layers[ind].name] = ind;
-
-                    //Delete the offset values (They will just hurt me)
-                    delete this.layers[ind].x;
-                    delete this.layers[ind].y;
-
-                    //Store the data values in a temporary location
-                    var data = this.layers[ind].data;
-
-                    //Add the collision data array to the layer
-                    this.layers[ind].collisionData = [];
-
-                    //Process the data values into quick readable formats
-                    var tileProg = 0;
-                    for (var y = 0; y < this.height; y++) {
-                        //Create a new array for this line of data
-                        this.layers[ind].data[y] = [];
-
-                        //Create a new array for this line of collision data
-                        this.layers[ind].collisionData[y] = [];
-
-                        //Loop through all values on this line
-                        for (var x = 0; x < this.width; x++) {
-                            //Get the tile index 
-                            var tileIndex = data[tileProg++];
-
-                            //Find the tileset that this index belongs to
-                            var foundTileset = -1;
-                            for (var j = 0; j < this.tilesets.length; j++) {
-                                //Check the tile index is within the tilesets range
-                                if (tileIndex >= this.tilesets[j].firstgid && tileIndex < this.tilesets[j].firstgid + this.tilesets[i].tilecount) {
-                                    foundTileset = j;
-                                    break;
-                                }
-                            }
-
-                            //Ensure that a tileset was found
-                            if (foundTileset >= 0) {
-                                //Subtract the first ID to get index into tileset
-                                tileIndex -= this.tilesets[foundTileset].firstgid;
-
-                                //Create a new Map Cell object
-                                var cell = new MapCell();
-
-                                //Assign the source image area
-                                cell.w = this.tilesets[foundTileset].tilewidth;
-                                cell.h = this.tilesets[foundTileset].tileheight;
-                                cell.x = this.tilesets[foundTileset].margin + (tileIndex % this.tilesets[foundTileset].columns) * (cell.w + this.tilesets[foundTileset].spacing);
-                                cell.y = this.tilesets[foundTileset].margin + Math.floor(tileIndex / this.tilesets[foundTileset].columns) * (cell.h + this.tilesets[foundTileset].spacing);
-
-                                //Assign the used tileset index
-                                cell.tilesetIndex = foundTileset;
-
-                                //Add the cell to the layer map
-                                this.layers[ind].data[y][x] = cell;
-                            }
-
-                            //Throw an error if there is a tileindex issue
-                            else if (tileIndex != 0) throw new Error("Unable to find the tileset used for the Map Cell with TileID of " + tileIndex + ". This occured on layer " + ind + " ('" + this.layers[ind].name + "')");
-
-                            //Set the collision data
-                            this.layers[ind].collisionData[y][x] = (this.layers[ind].data[y][x] instanceof MapCell ? 1 : 0);
-                        }
-                    }
-
-                    break;
-                case "objectgroup":
-                    //Assign this layer object to the  object layers map
-                    this.objectLayers[this.objectLayers.length] = mapObj.layers[i];
-                    break;
-            }
-        }
 
         //Return itself
         return this;

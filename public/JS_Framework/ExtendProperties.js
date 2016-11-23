@@ -43,3 +43,18 @@ function ExtendProperties(pObj, pCollection) {
             Object.defineProperty(pObj.prototype, prop, description);
     }
 };
+
+/*
+ *      Name: Math Extensions
+ *      Author: Mitchell Croft
+ *      Date: 23/11/2016
+ *
+ *      Version: 1.0
+ *
+ *      Purpose:
+ *      Add additional functionality to the Math object
+ **/
+
+//Add angle conversion values
+Math.rad2Deg = 180 / Math.PI;
+Math.deg2Rad = Math.PI / 180;

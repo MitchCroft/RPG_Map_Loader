@@ -23,12 +23,16 @@ graphics.setWindowResizeCallback(function(pWidth, pHeight) {
 Input.setCanvas(graphics.canvas);
 
 //Create the input axis
-var VERTICAL_AXIS = new InputAxis("vertical", Keys.S, Keys.W, 0.5, 0.25, Keys.DOWN, Keys.UP);
-var HORIZONTAL_AXIS = new InputAxis("horizontal", Keys.D, Keys.A, 0.5, 0.25, Keys.RIGHT, Keys.LEFT);
+var VERTICAL_AXIS = new InputAxis("vertical", Keys.W, Keys.S, 0.5, 0.25, Keys.UP, Keys.DOWN);
+var HORIZONTAL_AXIS = new InputAxis("horizontal", Keys.D, Keys.A, 0.5, 0.25);
+var ROTATION_AXIS = new InputAxis("rotate", Keys.LEFT, Keys.RIGHT, 0.5, 2);
+var ZOOM_AXIS = new InputAxis("zoom", Keys.SPACE, 0, 0.5);
 
 //Add the input axis to the Input Manager
 Input.addAxis(VERTICAL_AXIS);
 Input.addAxis(HORIZONTAL_AXIS);
+Input.addAxis(ROTATION_AXIS);
+Input.addAxis(ZOOM_AXIS);
 
 /*--------------------Rendering--------------------*/
 //Create the camera to view the environment
@@ -116,14 +120,19 @@ function updateLoop(pDelta) {
         fpsTimer = fpsSum = fpsIterations = 0;
     }
 
+    //Get the camera relative direction
+    var camUp = new Vec2(0, -1).rotate(camera.rotation * Math.deg2Rad);
+
     //Get the movement direction
-    var moveDir = new Vec2(Input.getAxis("horizontal"), Input.getAxis("vertical"));
+    var moveDir = camUp.multi(Input.getAxis("vertical")).addSet(camUp.right.multiSet(Input.getAxis("horizontal")));
 
     //Normalise movement if needed
     if (moveDir.mag > 1) moveDir.normalize();
 
     //Move the camera around
     camera.position = camera.position.addSet(moveDir.multiSet(CAMERA_MOVE_SPEED));
+    camera.distance = Input.getAxis("zoom") * 14 + 1;
+    camera.rotation += Input.getAxis("rotate") * 90 * pDelta;
 
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ////-------------------------------------------Clear Background-------------------------------------------////
