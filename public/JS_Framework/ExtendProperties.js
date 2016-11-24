@@ -116,3 +116,16 @@ Math.lerpClamped = function(pStart, pEnd, pT) {
     //Return the interpolation
     return (pStart + (pEnd - pStart) * pT);
 };
+
+/*
+    Math : randomRange - Returns a random number between a defined range
+    24/11/2016
+
+    @param[in] pMin - The minimum value of the range (inclusive)
+    @param[in] pMax - The maximum value of the range (exclusive)
+
+    @return number - Returns a random number between the defined range
+*/
+Math.randomRange = function(pMin, pMax) {
+    return (Math.random() * (pMax - pMin) + pMin);
+};
