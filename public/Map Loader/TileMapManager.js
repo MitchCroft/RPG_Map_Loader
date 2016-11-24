@@ -49,7 +49,7 @@ function TileMapManager(pDisplayTileWidth, pDisplayTileHeight) {
         displayDimensions: new Vec2(typeof pDisplayTileWidth === "number" ? pDisplayTileWidth : 10, typeof pDisplayTileHeight === "number" ? pDisplayTileHeight : 10),
 
         //Highlight debugging information for specific layers
-        hightlightLayers: [],
+        highlightLayers: [],
     };
 };
 
@@ -92,13 +92,19 @@ ExtendProperties(TileMapManager, {
         @param[in] pIdents - Either a single identifier or an array of identifiers for layers to highlight
     */
     set highlightLayers(pIdents) {
+        //Clear the highlight layers array
+        this.__Internal__Dont__Modify__.highlightLayers = [];
+
+        //Check the input for null
+        if (pIdents == null) return;
+
         //Check if the identifier is not an array
-        if (!pIdents instanceof Array)
+        if (typeof pIdents === "string" || !pIdents instanceof Array)
             pIdents = [pIdents];
 
         //Loop through and validate all identifiers
         for (var i = 0; i < pIdents.length; i++)
-            pIdents[i] = this.validifyLayerIdentifier(pIdents[i], -1);
+            this.__Internal__Dont__Modify__.highlightLayers[i] = this.validifyLayerIdentifier(pIdents[i], -1);
     },
 
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -131,7 +137,7 @@ ExtendProperties(TileMapManager, {
                 break;
             case "number":
                 //Round the number off to the closest integral number
-                pIdent = math.round(pIdent);
+                pIdent = Math.round(pIdent);
 
                 //Ensure the index is within range
                 if (pIdent < 0 || pIdent >= this.__Internal__Dont__Modify__.loadedMaps[this.__Internal__Dont__Modify__.currentMapIndex].layers.length) {
@@ -211,7 +217,7 @@ ExtendProperties(TileMapManager, {
         this.__Internal__Dont__Modify__.currentMapIndex = pIdent;
 
         //Clear the highlight layers identifiers
-        this.__Internal__Dont__Modify__.hightlightLayers = [];
+        this.__Internal__Dont__Modify__.highlightLayers = [];
 
         //If there is a callback pass the information to it
         if (typeof pCallback === "function") {
@@ -290,14 +296,14 @@ ExtendProperties(TileMapManager, {
             pIdents = [];
 
             //Add every index into the array
-            for (var i = 0; i < activeMap.layers.length; i++)
+            for (var i = 0; i < curMap.layers.length; i++)
                 pIdents[i] = i;
         }
 
         //Process defined identifiers
         else {
             //If the identifiers are not in an array
-            if (!pIdents instanceof Array)
+            if (typeof pIdents === "string" || !pIdents instanceof Array)
                 pIdents = [pIdents];
 
             //Clean all identifiers within the array
@@ -357,14 +363,14 @@ ExtendProperties(TileMapManager, {
             pIdents = [];
 
             //Add every index into the array
-            for (var i = 0; i < activeMap.layers.length; i++)
+            for (var i = 0; i < curMap.layers.length; i++)
                 pIdents[i] = i;
         }
 
         //Process defined identifiers
         else {
             //If the identifiers are not in an array
-            if (!pIdents instanceof Array)
+            if (typeof pIdents === "string" || !pIdents instanceof Array)
                 pIdents = [pIdents];
 
             //Clean all identifiers within the array
@@ -455,7 +461,7 @@ ExtendProperties(TileMapManager, {
         //Process defined identifiers
         else {
             //If the identifiers are not in an array
-            if (!pIdents instanceof Array)
+            if (typeof pIdents === "string" || !pIdents instanceof Array)
                 pIdents = [pIdents];
 
             //Clean all identifiers within the array
@@ -500,6 +506,12 @@ ExtendProperties(TileMapManager, {
         drawMin = this.worldPosToTileCoord(drawMin);
         drawMax = this.worldPosToTileCoord(drawMax);
 
+        //Clamp the drawing points within the map range
+        drawMin.x = Math.clamp(drawMin.x, 0, curMap.width - 1);
+        drawMin.y = Math.clamp(drawMin.y, 0, curMap.height - 1);
+        drawMax.x = Math.clamp(drawMax.x, 0, curMap.width - 1);
+        drawMax.y = Math.clamp(drawMax.y, 0, curMap.height - 1);
+
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////
         ////---------------------------------------------Draw The Tiles-------------------------------------------////
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -512,6 +524,9 @@ ExtendProperties(TileMapManager, {
             //Get the current layer ID
             var ID = pIdents[i];
 
+            //Check if the layer identifier is valid
+            if (ID < 0) continue;
+
             //Check if this layer is visible
             if (!curMap.layers[ID].visible) continue;
 
@@ -520,14 +535,8 @@ ExtendProperties(TileMapManager, {
 
             //Loop through the Y axis cells to draw
             for (var y = drawMin.y; y <= drawMax.y; y++) {
-                //Check the Y coord is valid
-                if (y < 0 || y >= curMap.height) continue;
-
                 //Loop through the X axis cells to draw
                 for (var x = drawMin.x; x <= drawMax.x; x++) {
-                    //Check the X coord is valid
-                    if (x < 0 || x >= curMap.width) continue;
-
                     //Get the MapCell for this location
                     var cell = curMap.layers[ID].data[y][x];
 
@@ -538,6 +547,41 @@ ExtendProperties(TileMapManager, {
                     pCtx.drawImage(curMap.tilesets[cell.tilesetIndex].image,
                         cell.x, cell.y, cell.w, cell.h,
                         x * curMap.tileWidth - 1, y * curMap.tileHeight - 1, curMap.tileWidth + 2, curMap.tileHeight + 2);
+                }
+            }
+        }
+
+        //Check for layer highlighting
+        if (this.__Internal__Dont__Modify__.highlightLayers.length) {
+            //Set the fill style to be red
+            pCtx.fillStyle = 'red';
+
+            //Set the global alpha to semi-transparent
+            pCtx.globalAlpha = 0.25;
+
+            //Loop through the cells in the area
+            for (var y = drawMin.y; y <= drawMax.y; y++) {
+                for (var x = drawMin.x; x <= drawMax.x; x++) {
+                    //Flag if there is cell data at this point across any of the highlighting layers
+                    var flag = false;
+
+                    //Loop through all layers to check for collision
+                    for (var i = 0; i < this.__Internal__Dont__Modify__.highlightLayers.length; i++) {
+                        //Skip the layer if the ID is -1
+                        if (this.__Internal__Dont__Modify__.highlightLayers[i] < 0) continue;
+
+                        //Check if the collision map has values here
+                        if (curMap.layers[this.__Internal__Dont__Modify__.highlightLayers[i]].collisionData[y][x]) {
+                            //Raise the flag
+                            flag = true;
+
+                            //Break from the loop
+                            break;
+                        }
+                    }
+
+                    //If the flag was raised highlight the area
+                    if (flag) pCtx.fillRect(x * curMap.tileWidth, y * curMap.tileHeight, curMap.tileWidth, curMap.tileHeight);
                 }
             }
         }
@@ -614,6 +658,9 @@ function MapCell(pX, pY, pWidth, pHeight) {
     21/11/2016
 */
 function TileMap() {
+    //Flag if this map has been loaded yet
+    this.loaded = false;
+
     //Create an array for the differemt layers of the map
     this.layers = [];
 
@@ -649,6 +696,9 @@ ExtendProperties(TileMap, {
         @return this - Returns itself once the function has completed                                   
     */
     loadMap: function(pFilePath, pImageCallback) {
+        //Flag this map as not being loaded
+        this.loaded = false;
+
         //Store a reference to the current TileMap
         var that = this;
 
@@ -796,7 +846,7 @@ ExtendProperties(TileMap, {
                                 else if (tileIndex != 0) throw new Error("Unable to find the tileset used for the Map Cell with TileID of " + tileIndex + ". This occured on layer " + ind + " ('" + that.layers[ind].name + "')");
 
                                 //Set the collision data
-                                that.layers[ind].collisionData[y][x] = (that.layers[ind].data[y][x] instanceof MapCell ? 1 : 0);
+                                that.layers[ind].collisionData[y][x] = (that.layers[ind].data[y][x] instanceof MapCell);
                             }
                         }
 
@@ -807,6 +857,9 @@ ExtendProperties(TileMap, {
                         break;
                 }
             }
+
+            //Flag this map as loaded
+            that.loaded = true;
         };
 
         //Open the connection request

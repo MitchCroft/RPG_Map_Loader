@@ -58,3 +58,61 @@ function ExtendProperties(pObj, pCollection) {
 //Add angle conversion values
 Math.rad2Deg = 180 / Math.PI;
 Math.deg2Rad = Math.PI / 180;
+
+/*
+    Math : clamp - Clamps a specified value between a defined min and max
+    24/11/2016
+
+    @param[in] pVal - The value to be clamped
+    @param[in] pMin - The minimum value that can be returned
+    @param[in] pMax - The maximum value that can be returned
+
+    @return number - Returns the value between the two points
+*/
+Math.clamp = function(pVal, pMin, pMax) {
+    return (pVal < pMin ? pMin : (pVal > pMax ? pMax : pVal));
+};
+
+/*
+    Math : clamp01 - Clamps a specified value between 0 and 1
+    24/11/2016
+
+    @param[in] pVal - The value to be clamped 
+
+    @return number - Returns the value clamped between 0 and 1
+*/
+Math.clamp01 = function(pVal) {
+    return (pVal < 0 ? 0 : (pVal > 1 ? 1 : pVal));
+};
+
+/*
+    Math : lerp - Linearly interpolate between two numbers
+    24/11/2016
+
+    @param[in] pStart - The starting value to interpolate from
+    @param[in] pEnd - The ending value to interpolate to
+    @param[in] pT - The scale to indicate the progress between the points
+
+    @return number - Returns the interpolated value 
+*/
+Math.lerp = function(pStart, pEnd, pT) {
+    return (pStart + (pEnd - pStart) * pT);
+};
+
+/*
+    Math : lerpClamped - Linearly interpolate between numbers, clamping the scale between 0 and 1
+    24/11/2016
+
+    @param[in] pStart - The starting value to interpolate from
+    @param[in] pEnd - The ending value to interpolate to
+    @param[in] pT - The scale to indicate the progress between the points
+
+    @return number - Returns the interpolated value between the two points
+*/
+Math.lerpClamped = function(pStart, pEnd, pT) {
+    //Clamp the scale between 0 and 1
+    pT = Math.clamp01(pT);
+
+    //Return the interpolation
+    return (pStart + (pEnd - pStart) * pT);
+};
