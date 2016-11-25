@@ -687,7 +687,7 @@ ExtendProperties(TileMap, {
         TileMap : loadMap - Load a map from a Tiled Map Editor .json file
         21/11/2016
 
-        @param[in] pFilepath - The filepath of the .json file to load the information from
+        @param[in] pFilePath - The filepath of the .json file to load the information from
         @param[in] pImageCallback - An optional callback function that can be passed the 
                                     filepath of an image to load. Must return the loaded image
                                     (If not defined a new image object will be created for the 
@@ -702,16 +702,13 @@ ExtendProperties(TileMap, {
         //Store a reference to the current TileMap
         var that = this;
 
-        //Create a container for the return XML results
-        var content = null;
-
         //Create the HTTP request
         var httpReq = new XMLHttpRequest();
 
         //Set the on load function
         httpReq.onload = function() {
             //Set the content 
-            content = (httpReq.status === 200 && httpReq.readyState === 4 ? httpReq.responseText : "");
+            var content = (httpReq.status === 200 && httpReq.readyState === 4 ? httpReq.responseText : "");
 
             //Check if the content was loaded
             if (content === "") throw new Error("Unable to load the content found at " + pFilePath);

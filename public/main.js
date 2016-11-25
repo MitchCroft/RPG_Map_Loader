@@ -23,8 +23,8 @@ graphics.setWindowResizeCallback(function(pWidth, pHeight) {
 Input.setCanvas(graphics.canvas);
 
 //Create the input axis
-var VERTICAL_AXIS = new InputAxis("vertical", Keys.W, Keys.S, 5, 2, Keys.UP, Keys.DOWN);
-var HORIZONTAL_AXIS = new InputAxis("horizontal", Keys.D, Keys.A, 5, 2);
+var VERTICAL_AXIS = new InputAxis("vertical", Keys.W, Keys.S, 10, 10, Keys.UP, Keys.DOWN);
+var HORIZONTAL_AXIS = new InputAxis("horizontal", Keys.D, Keys.A, 10, 10);
 var ROTATION_AXIS = new InputAxis("rotate", Keys.LEFT, Keys.RIGHT, 10, 2);
 var ZOOM_AXIS = new InputAxis("zoom", Keys.SPACE, 0, 3);
 
@@ -49,7 +49,7 @@ graphics.addCanvasResizeEvent(function(pWidth, pHeight) {
 var mapManager = new TileMapManager(15, 10);
 
 //Create the main map
-var MAIN_MAP = new TileMap().loadMap("Map Loader\/TestMap.json", function(pFilePath) {
+var MAIN_MAP = new TileMap().loadMap("RPG_JS\/Map\/TestMap.json", function(pFilePath) {
     return graphics.loadImage(pFilePath);
 });
 
@@ -65,14 +65,19 @@ mapManager.addMap(MAIN_MAP, "Main");
 //Store the position of the player
 var playerPosition = new Vec2();
 
+//Store the players Animation Controller
+var playerAnimator = new AnimationController().loadAnimator("RPG_JS\/Characters\/PlayerAnimator.json", function(pFilePath) {
+    return graphics.loadImage(pFilePath);
+});
+
 //Store a flag for highlighting the collision layer
 var debugCollision = false;
 
 //Store the size of the player
-var PLAYER_RECT_DIM = 25;
+var PLAYER_RECT_DIM = 30;
 
 //Store the player moves speed
-var PLAYER_MOVE_SPEED = 250;
+var PLAYER_MOVE_SPEED = 200;
 
 //Store the speed with which the camera lerps to the player
 var CAMERA_MOVE_SPEED = 250;
@@ -114,6 +119,14 @@ function updateLoop(pDelta) {
 
     //Move the vector out by the player movement speed
     moveDir.multiSet(PLAYER_MOVE_SPEED * pDelta);
+
+    //Set the players animation based on input movement
+    playerAnimator.paused = !moveDir.sqrMag;
+    if (moveDir.x) playerAnimator.currentAnimation = "Walk " + (moveDir.x < 0 ? "Left" : "Right");
+    else if (moveDir.y) playerAnimator.currentAnimation = "Walk " + (moveDir.y < 0 ? "Up" : "Down");
+
+    //Update the player animator
+    playerAnimator.update(pDelta);
 
     //Store the movement values to check into an array
     var movementAxis = [new Vec2(moveDir.x, 0), new Vec2(0, moveDir.y)];
@@ -165,13 +178,12 @@ function updateLoop(pDelta) {
     //Set the projection world view matrix
     graphics.transform = projView.multi(createTransform(playerPosition.x, playerPosition.y));
 
-    //Set the fill style for the draw call
-    graphics.draw.fillStyle = 'red';
-    graphics.draw.strokeStyle = 'black';
+    //Get the animation information from the player animator
+    var playerAni = playerAnimator.drawFrame;
 
-    //Draw the 'player'
-    graphics.draw.fillRect(-PLAYER_RECT_DIM / 2, -PLAYER_RECT_DIM / 2, PLAYER_RECT_DIM, PLAYER_RECT_DIM);
-    graphics.draw.strokeRect(-PLAYER_RECT_DIM / 2, -PLAYER_RECT_DIM / 2, PLAYER_RECT_DIM, PLAYER_RECT_DIM);
+    //Draw the player
+    graphics.draw.drawImage(playerAni.image,
+        playerAni.x, playerAni.y, playerAni.w, playerAni.h, -PLAYER_RECT_DIM / 2, -PLAYER_RECT_DIM / 2, PLAYER_RECT_DIM, PLAYER_RECT_DIM);
 
     //Render the foreground
     mapManager.draw(graphics.draw, camera, "Foreground");
@@ -194,7 +206,7 @@ function updateLoop(pDelta) {
 */
 function ignition() {
     //Check the main map has loaded
-    if (MAIN_MAP.loaded) {
+    if (MAIN_MAP.loaded && playerAnimator.loaded) {
         //Set the active Map
         mapManager.setActiveMap("Main", function(pObjLayer) {
             //Loop through the objects that are within the map
