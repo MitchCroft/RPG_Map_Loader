@@ -433,7 +433,7 @@ ExtendProperties(AnimationController, {
         var curAnim = this.__Internal__Dont__Modify__.animations[this.__Internal__Dont__Modify__.currentAnimation];
 
         //Claculate the time per frame for the current animation
-        var timePerFrame = curAnim.fps * curAnim.speed * this.__Internal__Dont__Modify__.speed;
+        var timePerFrame = curAnim.fps / curAnim.speed / this.__Internal__Dont__Modify__.speed;
 
         //Loop until the elapsed time is used up
         while (this.__Internal__Dont__Modify__.elapsedTime >= timePerFrame) {
