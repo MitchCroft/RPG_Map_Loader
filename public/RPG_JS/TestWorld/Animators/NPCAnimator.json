@@ -1,11 +1,18 @@
 {
     "name": "Player Animator",
-    "tilesets": ["RPG_JS\/Characters\/Player.png"],
-    "framewidth": 32,
-    "frameheight": 32,
+    "tilesets": [
+        "..\/Textures\/Characters\/NPC 1.png",
+        "..\/Textures\/Characters\/NPC 2.png",
+        "..\/Textures\/Characters\/NPC 3.png",
+        "..\/Textures\/Characters\/NPC 4.png",
+        "..\/Textures\/Characters\/NPC 5.png",
+        "..\/Textures\/Characters\/NPC 6.png"
+    ],
+    "framewidth": 96,
+    "frameheight": 96,
     "columns": 3,
-    "imagewidth": 96,
-    "imageheight": 128,
+    "imagewidth": 288,
+    "imageheight": 384,
     "speed": 1,
     "animations": [{
         "name": "Walk Down",

@@ -79,7 +79,7 @@
         "tilesets": [{
                 "columns": 16,
                 "firstgid": 1,
-                "image": "RPG_JS\/Map\/tileset.png",
+                "image": "..\/Textures\/Terrain\/tileset.png",
                 "imageheight": 512,
                 "imagewidth": 512,
                 "margin": 0,
@@ -91,7 +91,7 @@
         }, {
                 "columns": 32,
                 "firstgid": 257,
-                "image": "RPG_JS\/Map\/terrain_atlas.png",
+                "image": "..\/Textures\/Terrain\/terrain_atlas.png",
                 "imageheight": 1024,
                 "imagewidth": 1024,
                 "margin": 0,

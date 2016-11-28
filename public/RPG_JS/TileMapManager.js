@@ -134,7 +134,6 @@ ExtendProperties(TileMapManager, {
 
                 //Return the found index layer
                 return this.__Internal__Dont__Modify__.loadedMaps[this.__Internal__Dont__Modify__.currentMapIndex].layerNamesToIndex[pIdent];
-                break;
             case "number":
                 //Round the number off to the closest integral number
                 pIdent = Math.round(pIdent);
@@ -147,7 +146,6 @@ ExtendProperties(TileMapManager, {
 
                 //Return the identification index
                 return pIdent;
-                break;
             default:
                 //Type mismatch
                 throw new Error("Value of type " + typeof pIdent + " was used as an identifier for a layer");
