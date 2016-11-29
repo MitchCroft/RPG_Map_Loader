@@ -21,9 +21,9 @@
  *      NOTE: Animator JSON Layout
  *
  *      name: The name of the animator
- *      tilesets: An array of file paths to different tile sets. A 
- *                random one will be selected to use for the Animation
- *                Controller, so all of the properties of this file
+ *      tilesets: An array of file paths to different tile sets relative to the 
+ *                Animator JSON file. A random one will be selected to use for 
+ *                the Animation Controller, so all of the properties of this file
  *                should be applicable to all tile sets
  *      framewidth: The width of a single animation frame
  *      frameheight: The height of a single animation frame
@@ -335,12 +335,12 @@ ExtendProperties(AnimationController, {
 
             //Load the image via the callback if set
             if (typeof pImageCallback === "function")
-                that.__Internal__Dont__Modify__.image = pImageCallback(animator.tilesets[toLoad]);
+                that.__Internal__Dont__Modify__.image = pImageCallback(Path.getDirectory(pFilePath) + animator.tilesets[toLoad]);
 
             //Otherwise create a new image object
             else {
                 that.__Internal__Dont__Modify__.image = new Image();
-                that.__Internal__Dont__Modify__.image.src = animator.tilesets[toLoad];
+                that.__Internal__Dont__Modify__.image.src = Path.getDirectory(pFilePath) + animator.tilesets[toLoad];
             }
 
             //Store the tile sheet information

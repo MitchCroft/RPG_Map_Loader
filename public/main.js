@@ -46,15 +46,27 @@ graphics.addCanvasResizeEvent(function(pWidth, pHeight) {
 
 /*--------------------Map--------------------*/
 //Create the Map Manager
-var mapManager = new TileMapManager(15, 10);
-
-//Create the main map
-var MAIN_MAP = new TileMap().loadMap("RPG_JS\/Map\/TestMap.json", function(pFilePath) {
+var worldManager = new WorldManager(function(pFilePath) {
     return graphics.loadImage(pFilePath);
-});
+}, function(pObjLayer) {
+    //Loop through the objects that are within the map
+    for (var i = 0; i < pObjLayer.objects.length; i++) {
+        //Switch on the type of the object
+        switch (pObjLayer.objects[i].type) {
+            case "Spawn":
+                //Set the player to this position
+                playerPosition = new Vec2(pObjLayer.objects[i].x, pObjLayer.objects[i].y);
 
-//Add the test map to the manager
-mapManager.addMap(MAIN_MAP, "Main");
+                //Move the camera to this position
+                camera.position = playerPosition;
+
+                break;
+            default:
+                console.log("Object layer " + pObjLayer.name + " logged the object " + pObjLayer.objects[i].name);
+                break;
+        }
+    }
+}).loadWorld("RPG_JS\/TestWorld\/TestWorld.json");
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /////                                                                                                            ////
@@ -66,9 +78,12 @@ mapManager.addMap(MAIN_MAP, "Main");
 var playerPosition = new Vec2();
 
 //Store the players Animation Controller
-var playerAnimator = new AnimationController().loadAnimator("RPG_JS\/Characters\/PlayerAnimator.json", function(pFilePath) {
+var playerAnimator = new AnimationController().loadAnimator("RPG_JS\/TestWorld\/Animators\/PlayerAnimator.json", function(pFilePath) {
     return graphics.loadImage(pFilePath);
 });
+
+//Pause the animator to being with
+playerAnimator.paused = true;
 
 //Store a flag for highlighting the collision layer
 var debugCollision = false;
@@ -95,6 +110,9 @@ function updateLoop(pDelta) {
     //Update the input manager
     Input.update(pDelta);
 
+    //Update the world manager
+    worldManager.update(pDelta);
+
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ////-----------------------------------------Update Player & Camera---------------------------------------////
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -105,41 +123,47 @@ function updateLoop(pDelta) {
         debugCollision = !debugCollision;
 
         //Set the highlighted layers in the map manager
-        mapManager.highlightLayers = (debugCollision ? "Collision" : null);
+        worldManager.highlightLayers = (debugCollision ? "Collideable" : null);
     }
 
-    //Get the camera relative up direction
-    var camUp = new Vec2(0, -1).rotate(camera.rotation * Math.deg2Rad);
+    //Get the transition progress of the World Manager
+    var transProg = worldManager.transitionProgress;
 
-    //Get the movement direction
-    var moveDir = camUp.multi(Input.getAxis("vertical")).addSet(camUp.right.multiSet(Input.getAxis("horizontal")));
+    //Disable player movement while the level hasn't loaded
+    if (transProg === 1) {
+        //Get the camera relative up direction
+        var camUp = new Vec2(0, -1).rotate(camera.rotation * Math.deg2Rad);
 
-    //Normalise movement if needed
-    if (moveDir.sqrMag > 1) moveDir.normalize();
+        //Get the movement direction
+        var moveDir = camUp.multi(Input.getAxis("vertical")).addSet(camUp.right.multiSet(Input.getAxis("horizontal")));
 
-    //Move the vector out by the player movement speed
-    moveDir.multiSet(PLAYER_MOVE_SPEED * pDelta);
+        //Normalise movement if needed
+        if (moveDir.sqrMag > 1) moveDir.normalize();
 
-    //Set the players animation based on input movement
-    playerAnimator.paused = !moveDir.sqrMag;
-    if (moveDir.x) playerAnimator.currentAnimation = "Walk " + (moveDir.x < 0 ? "Left" : "Right");
-    else if (moveDir.y) playerAnimator.currentAnimation = "Walk " + (moveDir.y < 0 ? "Up" : "Down");
+        //Move the vector out by the player movement speed
+        moveDir.multiSet(PLAYER_MOVE_SPEED * pDelta);
+
+        //Set the players animation based on input movement
+        playerAnimator.paused = !moveDir.sqrMag;
+        if (moveDir.x) playerAnimator.currentAnimation = "Walk " + (moveDir.x < 0 ? "Left" : "Right");
+        else if (moveDir.y) playerAnimator.currentAnimation = "Walk " + (moveDir.y < 0 ? "Up" : "Down");
+
+        //Store the movement values to check into an array
+        var movementAxis = [new Vec2(moveDir.x, 0), new Vec2(0, moveDir.y)];
+
+        //Loop through collision areas to check
+        for (var i = 0; i < movementAxis.length; i++) {
+            //Get the position to check
+            var collisionCheck = playerPosition.add(movementAxis[i]);
+
+            //Test collision for the movement values
+            if (!worldManager.testObjectCollision(collisionCheck.x - PLAYER_RECT_DIM / 2, collisionCheck.y - PLAYER_RECT_DIM / 2, PLAYER_RECT_DIM, PLAYER_RECT_DIM, "Collideable"))
+                playerPosition.set(collisionCheck);
+        }
+    }
 
     //Update the player animator
     playerAnimator.update(pDelta);
-
-    //Store the movement values to check into an array
-    var movementAxis = [new Vec2(moveDir.x, 0), new Vec2(0, moveDir.y)];
-
-    //Loop through collision areas to check
-    for (var i = 0; i < movementAxis.length; i++) {
-        //Get the position to check
-        var collisionCheck = playerPosition.add(movementAxis[i]);
-
-        //Test collision for the movement values
-        if (!mapManager.testObjectCollision(collisionCheck.x - PLAYER_RECT_DIM / 2, collisionCheck.y - PLAYER_RECT_DIM / 2, PLAYER_RECT_DIM, PLAYER_RECT_DIM, "Collision"))
-            playerPosition.set(collisionCheck);
-    }
 
     //Get the vector to the player
     var camSeperationVec = playerPosition.subtract(camera.position);
@@ -173,7 +197,7 @@ function updateLoop(pDelta) {
     var projView = camera.projectionView;
 
     //Render the background
-    mapManager.draw(graphics.draw, camera, [0, 1, 2]);
+    worldManager.draw(graphics.draw, camera, ["Base", 1, 2]);
 
     //Set the projection world view matrix
     graphics.transform = projView.multi(createTransform(playerPosition.x, playerPosition.y));
@@ -186,7 +210,7 @@ function updateLoop(pDelta) {
         playerAni.x, playerAni.y, playerAni.w, playerAni.h, -PLAYER_RECT_DIM / 2, -PLAYER_RECT_DIM / 2, PLAYER_RECT_DIM, PLAYER_RECT_DIM);
 
     //Render the foreground
-    mapManager.draw(graphics.draw, camera, "Foreground");
+    worldManager.draw(graphics.draw, camera, "Foreground");
 
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ////-------------------------------------------Draw UI Elements-------------------------------------------////
@@ -195,9 +219,31 @@ function updateLoop(pDelta) {
     //Apply the UI transform
     graphics.transform = camera.projectionUI;
 
+    //Check if the map is transitioning 
+    if (transProg !== 1) {
+        //Store the fade opacity
+        var opacity = 0;
+
+        //Claculate the opacity
+        if (transProg < 0.5) opacity = transProg / 0.5;
+        else opacity = 1 - (transProg - 0.5) / 0.5;
+
+        //Set the global alpha
+        graphics.draw.globalAlpha = opacity;
+
+        //Set the fill style to black
+        graphics.draw.fillStyle = "black";
+
+        //Fill in the screen
+        graphics.draw.fillRect(0, 0, WORLD_VIEW_WIDTH, WORLD_VIEW_HEIGHT);
+
+        //Reset the alpha
+        graphics.draw.globalAlpha = 1;
+    }
+
     //Display the FPS
     graphics.draw.font = "36px Arial";
-    graphics.outlineText("FPS: " + (1 / pDelta).toFixed(0), 5, 40, 'red');
+    graphics.outlineText("FPS: " + (1 / pDelta).toFixed(0), 5, 40, "red");
 };
 
 /*
@@ -205,30 +251,12 @@ function updateLoop(pDelta) {
     24/11/2016
 */
 function ignition() {
-    //Check the main map has loaded
-    if (MAIN_MAP.loaded && playerAnimator.loaded) {
-        //Set the active Map
-        mapManager.setActiveMap("Main", function(pObjLayer) {
-            //Loop through the objects that are within the map
-            for (var i = 0; i < pObjLayer.objects.length; i++) {
-                //Switch on the type of the object
-                switch (pObjLayer.objects[i].type) {
-                    case "Spawn":
-                        //Set the player to this position
-                        playerPosition = new Vec2(pObjLayer.objects[i].x, pObjLayer.objects[i].y);
+    //Check the world manager has loaded properly
+    if (worldManager.loaded) {
+        //Load the initial map
+        worldManager.activeMap = "Main";
 
-                        //Move the camera to this position
-                        camera.position = playerPosition;
-
-                        break;
-                    default:
-                        console.log("Object layer " + pObjLayer.name + " logged the object " + pObjLayer.objects[i].name);
-                        break;
-                }
-            }
-        });
-
-        //Assign the game loop to the State Manager
+        //Assign the updateLoop to the StateManager
         StateManager.setGameFunction(updateLoop);
     }
 };

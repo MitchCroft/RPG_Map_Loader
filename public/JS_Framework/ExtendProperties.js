@@ -44,6 +44,12 @@ function ExtendProperties(pObj, pCollection) {
     }
 };
 
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/////                                                                                                            ////
+/////                                                Object Extensions                                           ////
+/////                                                                                                            ////
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 /*
  *      Name: Math Extensions
  *      Author: Mitchell Croft
@@ -128,4 +134,45 @@ Math.lerpClamped = function(pStart, pEnd, pT) {
 */
 Math.randomRange = function(pMin, pMax) {
     return (Math.random() * (pMax - pMin) + pMin);
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/////                                                                                                            ////
+/////                                                 Object Definition                                          ////
+/////                                                                                                            ////
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/*
+ *      Name: Path
+ *      Author: Mitchell Croft
+ *      Date: 28/11/2016
+ *
+ *      Version: 1.0
+ *
+ *      Purpose:
+ *      Provide some basic file path functionality
+ **/
+var Path = {
+    /*
+        Path : getDirectory - Get the directory from a passed in filepath
+        28/11/2016
+
+        @param[in] pFilePath - The filepath to find the final directory of 
+
+        @return string - Returns the directory path as a string 
+    */
+    getDirectory: function(pFilePath) {
+        //Check if there is a '.' in the filepath
+        if (pFilePath.lastIndexOf(".") === -1) {
+            //Check if there is a seperator at the end of the string
+            if (Math.max(pFilePath.lastIndexOf("\\"), pFilePath.lastIndexOf("/"), pFilePath.lastIndexOf("\/")) + 1 < pFilePath.length)
+                return pFilePath + "/";
+
+            //Otherwise return the basic string
+            return pFilePath;
+        }
+
+        //Otherwise find the last seperator character
+        return pFilePath.substring(0, Math.max(pFilePath.lastIndexOf("\\"), pFilePath.lastIndexOf("/"), pFilePath.lastIndexOf("\/")) + 1);
+    },
 };

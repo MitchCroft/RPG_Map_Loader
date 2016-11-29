@@ -1,0 +1,7 @@
+{
+    "name": "Test World",
+    "maps": [{
+        "identifier": "Main",
+        "filepath": "Maps\/MainMap.json"
+    }]
+}
