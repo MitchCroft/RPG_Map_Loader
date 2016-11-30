@@ -42,7 +42,7 @@ var StateManager = new function() {
         deltaTime = (deltaTime > 1 ? 1 : deltaTime);
 
         //Run the game function
-        if (typeof gameFunc === "function") gameFunc(deltaTime);
+        if (gameFunc) gameFunc(deltaTime);
 
         //Request browser re-call the game loop
         window.requestAnimationFrame(gameLoop);
@@ -74,6 +74,11 @@ var StateManager = new function() {
             StateManager.setGameFunction(creditsFunction);
     */
     this.setGameFunction = function(pFunc) {
+        //Check the type 
+        if (typeof pFunc !== "function")
+            throw new Error("Can not set the State manager's game function to " + pFunc + " (Type: '" + typeof pFunc + "') Please use a function that can take in delta time");
+
+        //Set the function
         gameFunc = pFunc;
     };
 };

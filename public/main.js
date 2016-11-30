@@ -54,12 +54,34 @@ var worldManager = new WorldManager(function(pFilePath) {
         //Switch on the type of the object
         switch (pObjLayer.objects[i].type) {
             case "Spawn":
-                //Set the player to this position
-                playerPosition = new Vec2(pObjLayer.objects[i].x, pObjLayer.objects[i].y);
+                //Check if the layer is for players
+                if (pObjLayer.name === "Player Layer") {
+                    //Set the player to this position
+                    player.position = new Vec2(pObjLayer.objects[i].x, pObjLayer.objects[i].y);
 
-                //Move the camera to this position
-                camera.position = playerPosition;
+                    //Move the camera to this position
+                    camera.position = player.position;
+                }
 
+                //If it is an NPC layer add a new NPC entity
+                else if (pObjLayer.name === "NPC Layer") {
+                    //Create a new Entity object
+                    var npc = new Entity();
+
+                    //Load the animator
+                    npc.animator.loadAnimator("RPG_JS\/TestWorld\/Animators\/NPCAnimator.json", function(pFilePath) {
+                        return graphics.loadImage(pFilePath);
+                    });
+
+                    //Set the NPC's position
+                    npc.position = new Vec2(pObjLayer.objects[i].x, pObjLayer.objects[i].y);
+
+                    //Set the dimensions of the NPC
+                    npc.width = npc.height = ENTITY_DIM_SIZE;
+
+                    //Add the NPC to the list of Entity
+                    inSceneEntity.push(npc);
+                }
                 break;
             default:
                 console.log("Object layer " + pObjLayer.name + " logged the object " + pObjLayer.objects[i].name);
@@ -74,22 +96,25 @@ var worldManager = new WorldManager(function(pFilePath) {
 /////                                                                                                            ////
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-//Store the position of the player
-var playerPosition = new Vec2();
+//Store the dimensions of the Entity
+var ENTITY_DIM_SIZE = 30;
 
-//Store the players Animation Controller
-var playerAnimator = new AnimationController().loadAnimator("RPG_JS\/TestWorld\/Animators\/PlayerAnimator.json", function(pFilePath) {
+//Create the player
+var player = new Entity();
+
+//Set the players animator
+player.animator.loadAnimator("RPG_JS\/TestWorld\/Animators\/PlayerAnimator.json", function(pFilePath) {
     return graphics.loadImage(pFilePath);
 });
 
-//Pause the animator to being with
-playerAnimator.paused = true;
+//Set the dimensions of the player
+player.width = player.height = ENTITY_DIM_SIZE;
+
+//Store an array of Entity in the scene
+var inSceneEntity = [player];
 
 //Store a flag for highlighting the collision layer
 var debugCollision = false;
-
-//Store the size of the player
-var PLAYER_RECT_DIM = 30;
 
 //Store the player moves speed
 var PLAYER_MOVE_SPEED = 200;
@@ -143,30 +168,26 @@ function updateLoop(pDelta) {
         //Move the vector out by the player movement speed
         moveDir.multiSet(PLAYER_MOVE_SPEED * pDelta);
 
-        //Set the players animation based on input movement
-        playerAnimator.paused = !moveDir.sqrMag;
-        if (moveDir.x) playerAnimator.currentAnimation = "Walk " + (moveDir.x < 0 ? "Left" : "Right");
-        else if (moveDir.y) playerAnimator.currentAnimation = "Walk " + (moveDir.y < 0 ? "Up" : "Down");
-
         //Store the movement values to check into an array
         var movementAxis = [new Vec2(moveDir.x, 0), new Vec2(0, moveDir.y)];
 
         //Loop through collision areas to check
         for (var i = 0; i < movementAxis.length; i++) {
-            //Get the position to check
-            var collisionCheck = playerPosition.add(movementAxis[i]);
+            //Check if there is any displacement on the axis
+            if (!movementAxis[i].sqrMag) continue;
 
             //Test collision for the movement values
-            if (!worldManager.testObjectCollision(collisionCheck.x - PLAYER_RECT_DIM / 2, collisionCheck.y - PLAYER_RECT_DIM / 2, PLAYER_RECT_DIM, PLAYER_RECT_DIM, "Collideable"))
-                playerPosition.set(collisionCheck);
+            if (!worldManager.testObjectCollision(player.x + movementAxis[i].x, player.y + movementAxis[i].y, player.width, player.height, "Collideable"))
+                player.move(movementAxis[i]);
         }
     }
 
     //Update the player animator
-    playerAnimator.update(pDelta);
+    for (var i = 0; i < inSceneEntity.length; i++)
+        inSceneEntity[i].update(pDelta);
 
     //Get the vector to the player
-    var camSeperationVec = playerPosition.subtract(camera.position);
+    var camSeperationVec = player.position.subtract(camera.position);
 
     //Get the cameras distance scale
     var moveScale = Math.clamp01(camSeperationVec.mag / CAMERA_MAX_DISTANCE);
@@ -199,15 +220,12 @@ function updateLoop(pDelta) {
     //Render the background
     worldManager.draw(graphics.draw, camera, ["Base", 1, 2]);
 
-    //Set the projection world view matrix
-    graphics.transform = projView.multi(createTransform(playerPosition.x, playerPosition.y));
+    //Set the projection view matrix
+    graphics.transform = projView;
 
-    //Get the animation information from the player animator
-    var playerAni = playerAnimator.drawFrame;
-
-    //Draw the player
-    graphics.draw.drawImage(playerAni.image,
-        playerAni.x, playerAni.y, playerAni.w, playerAni.h, -PLAYER_RECT_DIM / 2, -PLAYER_RECT_DIM / 2, PLAYER_RECT_DIM, PLAYER_RECT_DIM);
+    //Draw the characters
+    for (var i = 0; i < inSceneEntity.length; i++)
+        inSceneEntity[i].draw(graphics.draw);
 
     //Render the foreground
     worldManager.draw(graphics.draw, camera, "Foreground");
@@ -221,15 +239,8 @@ function updateLoop(pDelta) {
 
     //Check if the map is transitioning 
     if (transProg !== 1) {
-        //Store the fade opacity
-        var opacity = 0;
-
-        //Claculate the opacity
-        if (transProg < 0.5) opacity = transProg / 0.5;
-        else opacity = 1 - (transProg - 0.5) / 0.5;
-
-        //Set the global alpha
-        graphics.draw.globalAlpha = opacity;
+        //Calculate the fade transperency
+        graphics.draw.globalAlpha = (transProg < 0.5 ? transProg / 0.5 : 1 - (transProg - 0.5) / 0.5);
 
         //Set the fill style to black
         graphics.draw.fillStyle = "black";
@@ -244,6 +255,9 @@ function updateLoop(pDelta) {
     //Display the FPS
     graphics.draw.font = "36px Arial";
     graphics.outlineText("FPS: " + (1 / pDelta).toFixed(0), 5, 40, "red");
+
+    //Swap over the render buffers
+    graphics.swapBuffers();
 };
 
 /*

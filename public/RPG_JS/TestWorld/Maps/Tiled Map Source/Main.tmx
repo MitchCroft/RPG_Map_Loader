@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.0" orientation="orthogonal" renderorder="right-down" width="100" height="100" tilewidth="32" tileheight="32" nextobjectid="3">
+<map version="1.0" orientation="orthogonal" renderorder="right-down" width="100" height="100" tilewidth="32" tileheight="32" nextobjectid="8">
  <tileset firstgid="1" name="Environment" tilewidth="32" tileheight="32" tilecount="256" columns="16">
   <image source="../../Textures/Terrain/tileset.png" width="512" height="512"/>
  </tileset>
@@ -422,7 +422,20 @@
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 </data>
  </layer>
- <objectgroup name="NPC Layer"/>
+ <objectgroup name="NPC Layer">
+  <object id="3" name="NPC Spawn" type="Spawn" x="2112" y="866" width="31" height="30">
+   <ellipse/>
+  </object>
+  <object id="4" name="NPC Spawn" type="Spawn" x="1504" y="2176" width="31.4545" height="32">
+   <ellipse/>
+  </object>
+  <object id="5" name="NPC Spawn" type="Spawn" x="1600" y="2976.67" width="32" height="32">
+   <ellipse/>
+  </object>
+  <object id="6" name="NPC Spawn" type="Spawn" x="927.333" y="896" width="32.6667" height="32">
+   <ellipse/>
+  </object>
+ </objectgroup>
  <objectgroup name="Player Layer">
   <object id="1" name="Spawn Point" type="Spawn" x="1504" y="1728" width="32" height="32">
    <ellipse/>

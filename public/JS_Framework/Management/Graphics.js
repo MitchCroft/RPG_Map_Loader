@@ -7,294 +7,95 @@
 /*
  *      Name: Graphics
  *      Author: Mitchell Croft
- *      Date: 30/08/2016
+ *      Date: 30/11/2016
  *
- *      Version: 2.1
- *      Added window monitoring to provide window resize callback functionality
+ *      Version: 3.0
+ *      Removed use of pre-existing canvas objects and added a double buffer
  *
  *      Requires:
  *      Mat3.js, Color.js, ExtendProperties.js
  *
  *      Purpose:
- *      Control and manage the rendering of 2D graphics to a contained
- *      HTML5 canvas object. Provides basic hierarchal rendering
- *      capabilities.
+ *      Control and manage the rendering of 2D graphics to a contained 
+ *      HTML5 canvas object. Provides basic hierarchal rendering capabilities.
  **/
 
 /*
     Graphics : Constructor - Initialise the graphics manager
-    30/08/2016
+    30/11/2016
 
-    @param[in] pWidth - The desired width of the canvas (Default to tag settings)
-    @param[in] pHeight - The desired height of the canvas (Default to tag settings)
-    @param[in] pID - The ID of the canvas object to retrieve (Default to first on page)
-    @param[in] pResizeCallback - A bool flag to indicate if the graphics object should
-                                 call a user defiend callback when the window resizes (Default true)
+    @param[in] pWidth - The desired width of the canvas
+    @param[in] pHeight - The desired height of the canvas
+    @param[in] pResizeCallback - A bool flag to indicate if the graphics object
+                                 should call a user defined callback when the window
+                                 resizes (Default true)
 
     Example:
 
     //Create the graphics object
-    var graphics = new Graphics();
-    OR
     var graphics = new Graphics(1280, 720);
     OR
-    var graphics = new Graphics(1280, 720, "gameCanvas");
-    OR
-    var graphics = new Graphics(1280, 720, "gameCanvas", false);
+    var graphics = new Graphics(1280, 720, false);
 */
-function Graphics(pWidth, pHeight, pID, pResizeCallback) {
-    //Get the canvas object
-    this.canvas = (typeof pID === "string" ? document.getElementById(pID) :
-        document.getElementsByTagName("canvas")[0]);
+function Graphics(pWidth, pHeight, pResizeCallback) {
+    /*  WARNING:
+        Don't modify this internal object from the outside of the Graphics.
+        Instead use camera properties and functions to modify these values
+        as this allows for the internal information to update itself and keep it
+        correct.
+    */
+    this.__Internal__Dont__Modify__ = {
+        //Store two canvas objects for rendering to
+        canvas: [],
 
-    //Check that a canvas was found
-    if (this.canvas == null) {
-        //Create the new canvas element
-        this.canvas = document.createElement("canvas");
+        //Store references to the 2D context's for the different canvas'
+        context: [],
+
+        //Store the currently active buffer that is being rendered to
+        renderBufferIndex: 0,
+
+        //Store a stack of hierarchal matricies
+        renderStack: [],
+
+        //Store a map of loaded images
+        imageMap: [],
+
+        //Store a callback to a function which takes in the new window dimensions
+        windowResizeCallback: null,
+
+        //Save a list of callbacks to execute when the canvas changes size
+        canvasResizeEvents: [],
+    };
+
+    //Create the canvas and context objects
+    for (var i = 0; i < 2; i++) {
+        //Create the canvas
+        this.__Internal__Dont__Modify__.canvas[i] = document.createElement("canvas");
 
         //Add the canvas to the document
-        document.body.appendChild(this.canvas);
+        document.body.appendChild(this.__Internal__Dont__Modify__.canvas[i]);
+
+        //Set the dimensions of the canvas
+        this.__Internal__Dont__Modify__.canvas[i].width = Math.abs(pWidth);
+        this.__Internal__Dont__Modify__.canvas[i].height = Math.abs(pHeight);
+
+        //Get the 2D context from the canvas
+        this.__Internal__Dont__Modify__.context[i] = this.__Internal__Dont__Modify__.canvas[i].getContext("2d");
+
+        //Hide the current render buffer
+        //this.__Internal__Dont__Modify__.canvas[i].style.visibility = (i === this.__Internal__Dont__Modify__.renderBufferIndex ? "hidden" : "visible");
     }
 
-    //Set the window dimensions
-    if (typeof pWidth === "number") this.canvas.width = Math.abs(pWidth);
-    if (typeof pHeight === "number") this.canvas.height = Math.abs(pHeight);
-
-    //Get the 2D context from the canvas
-    this.draw = this.canvas.getContext("2d");
-
-    //Create the render stack
-    var renderStack = [];
-
-    //Store a map of loaded images
-    var imageMap = [];
-
-    //Store a callback to a function which takes in the new window dimensions
-    var windowResizeCallback = null;
-
-    //Save a list of callbacks to execute when the canvas changes size
-    var canvasResizeEvents = [];
-
-    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    /////                                                                                                            ////
-    /////                                            Rendering Functions                                             ////
-    /////                                                                                                            ////
-    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-    /*
-        Graphics : beginRender - Start the rendering with the passed in properties
-        31/07/2016
-
-        @param[in] pTranslateX - The X value to translate the drawing point to (Default 0)
-        @param[in] pTranslateY - The Y value to translate the drawing point to (Default 0)
-        @param[in] pRot - The amount of rotation (Radians) to apply to the rendering process (Default 0)
-        @param[in] pScaleX - The amount that the X dimension should be scaled by (Default 1)
-        @param[in] pScaleY - The amount that the Y dimension should be scaled by (Default 1)
-
-        Example:
-
-        //Render the player to the canvas
-        Graphics.beginRender(position.x, position.y, rotation, scale.x, scale.y);
-
-        //Draw player image
-        Graphics.draw.drawImage(...);
-    */
-    this.beginRender = function(pTranslateX, pTranslateY, pRot, pScaleX, pScaleY) {
-        //Create the new transform
-        var transform = createTranslationMat(typeof pTranslateX === "number" ? pTranslateX : 0,
-            typeof pTranslateY === "number" ? pTranslateY : 0);
-
-        //Apply the rotation matrix
-        if (typeof pRot === "number")
-            transform.multiSet(createRotationMat(pRot));
-
-        //Apply the scale matrix
-        if (typeof pScaleX === "number" || typeof pScaleY === "number")
-            transform.multiSet(createScaleMat(typeof pScaleX === "number" ? pScaleX : 1,
-                typeof pScaleY === "number" ? pScaleY : 1));
-
-        //Check if there are other transforms in the stack
-        if (renderStack.length)
-            transform.set(renderStack[renderStack.length - 1].multi(transform));
-
-        //Apply the transform
-        this.transform = transform;
-
-        //Push the transform onto the render stack
-        renderStack.push(transform);
-    };
-
-    /*
-        Graphics : endRender - End the rendering process restoring the pre-render properties
-        31/07/2016
-
-        Example:
-
-        //Draw player image
-        Graphics.draw.drawImage(...);
-
-        //End the rendering
-        Graphics.endRender();
-    */
-    this.endRender = function() {
-        //Pop the current transform from the stack
-        renderStack.pop();
-
-        //Reset the previous transform if it exists
-        if (renderStack.length) this.transform = renderStack[renderStack.length - 1];
-
-        //Set the identity matrix
-        else this.transform = null;
-    };
-
-    /*
-        Graphics : loadImage - Creates and loads an image from the specified file path
-                               if it does not already exist. Returns the previous instance
-                               if it does exist.
-        31/07/2016
-
-        @param[in] pFilepath - The filepath of the image to load (Relative to the HTML calling this)
-
-        @return Image Element - Returns a reference to an HTML Image element that has been
-                                added to the document and assigned the passed in image
-
-        Example:
-
-        //Load the player image
-        var playerImage = Graphics.loadImage("Sprites/player.png");
-    */
-    this.loadImage = function(pFilepath) {
-        //Check if the image has already been loaded
-        if (!(pFilepath in imageMap)) {
-            //Create a new image
-            imageMap[pFilepath] = new Image();
-            imageMap[pFilepath].src = pFilepath;
-        }
-
-        //Return the image object
-        return imageMap[pFilepath];
-    };
-
-    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    /////                                                                                                            ////
-    /////                                               Resize Functions                                             ////
-    /////                                                                                                            ////
-    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-    /*
-        Graphics : setWindowResizeCallback - Set the callback function for the window resize event
-        30/08/2016
-
-        @param[in] pCB - A function that takes in the new width and height of the viewable area (Or null
-                         to remove any callbacks)
-
-        @return bool - Returns true if the callback was set
-
-        Example:
-
-        //Set the window resize callback
-        Graphics.setWindowResizeCallback(function(pWidth, pHeight) {
-            //TODO: React to the window resize
-        });
-    */
-    this.setWindowResizeCallback = function(pCB) {
-        //Check the parameter is a function
-        if (pCB !== null && typeof pCB !== "function") return false;
-
-        //Overwrite previous callback
-        windowResizeCallback = pCB;
-
-        //Return success
-        return true;
-    };
-
-    /*
-        Graphics : addCanvasResizeEvent - Add a callback function to be called when the canvas is resized 
-                                          via the Graphics object
-        30/08/2016
-
-        @param[in] pCB - A function that takes in the new width and height of the viewable area as parameters
-
-        @return bool - Returns true if the callback was added to the event list
-
-        Example:
-
-        //Add a callback to canvas resizing
-        if (Graphics.addCanvasResizeEvent(resizeFunction)) {
-            //TODO: Output the success message
-        }
-    */
-    this.addCanvasResizeEvent = function(pCB) {
-        //Ensure the parameter is a function
-        if (typeof pCB !== "function") return false;
-
-        //Check that the function has not already been added once
-        for (var i = 0; i < canvasResizeEvents.length; i++) {
-            if (canvasResizeEvents[i] === pCB) return false;
-        }
-
-        //Add the callback to the list
-        canvasResizeEvents.push(pCB);
-
-        //Return success
-        return true;
-    };
-
-    /*
-        Graphics : removeCanvasResizeEvent - Remove a callback function from the canvas resize events list
-        30/08/2016
-
-        @param[in] pCB - The function to remove from the callback list
-
-        @return bool - Returns true if the callback was removed from the list
-
-        Example:
-
-        //Remove the callback from the canvas resizing
-        if (Graphics.removeCanvasResizeEvent(resizeFunction)) {
-            //TODO: Output the cuccess message
-        }
-    */
-    this.removeCanvasResizeEvent = function(pCB) {
-        //Loop through the events list
-        for (var i = 0; i < canvasResizeEvents.length; i++) {
-            //Check for function amtch
-            if (canvasResizeEvents[i] === pCB) {
-                //remove the function from the list
-                canvasResizeEvents.splice(i, 1);
-
-                //Return success
-                return true;
-            }
-        }
-
-        //Default return failure
-        return false;
-    };
-
-    /*
-        Graphics : triggerResizeEvents - Go through and call all canvas resize event callbacks
-                                         (Called through size, width and height properties)
-        30/08/2016
-
-        Example:
-
-        //Force resize callbacks
-        Graphics.triggerResizeEvents();
-    */
-    this.triggerResizeEvents = function() {
-        //Loop through all resize events
-        for (var i = 0; i < canvasResizeEvents.length; i++)
-            canvasResizeEvents[i](this.canvas.width, this.canvas.height);
-    };
-
-    //////////////////////////////-----Setup Window Resize Callback-----\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+    //Setup the window resize callback
     if (pResizeCallback !== false) {
+        //Store a reference to this
+        var that = this;
+
         //Assign the window callback
         window.addEventListener("resize", function() {
             //If the callback function has been set call it
-            if (typeof windowResizeCallback === "function")
-                windowResizeCallback(window.innerWidth, window.innerHeight);
+            if (typeof that.__Internal__Dont__Modify__.windowResizeCallback === "function")
+                that.__Internal__Dont__Modify__.windowResizeCallback(window.innerWidth, window.innerHeight);
         }, false);
     }
 };
@@ -305,6 +106,26 @@ ExtendProperties(Graphics, {
     /////                                               Property Definitions                                         ////
     /////                                                                                                            ////
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    /*
+        Graphics : draw - Get the rendering context for the current render buffer
+        30/11/2016
+
+        @return CanvasRenderingContext2D - Returns the rendering context for the current render buffer
+    */
+    get draw() {
+        return this.__Internal__Dont__Modify__.context[this.__Internal__Dont__Modify__.renderBufferIndex];
+    },
+
+    /*
+        Graphics : canvas - Get the canvas that is currently being rendered to
+        30/11/2016
+
+        @return Canvas - Returns a HTML5 canvas object 
+    */
+    get canvas() {
+        return this.__Internal__Dont__Modify__.canvas[this.__Internal__Dont__Modify__.renderBufferIndex];
+    },
 
     /*
         Graphics : transform - Change the current transform being being used to render
@@ -348,8 +169,8 @@ ExtendProperties(Graphics, {
     },
 
     /*
-        Graphics : size - Set the size of the contained canvas object
-        28/08/2016
+        Graphics : size - Set the size of the contained canvas objects
+        30/11/2016
 
         @param[in] pDim - A Vec2 object containing the new dimensions of the canvas
 
@@ -359,11 +180,18 @@ ExtendProperties(Graphics, {
         Graphics.size = new Vec2(1280, 720);
     */
     set size(pDim) {
-        //Set the canvas dimensions
-        this.canvas.width = pDim.x;
-        this.canvas.height = pDim.y;
+        //Check the type
+        if (!pDim instanceof Vec2)
+            throw new Error("Can not set the canvas dimensions to " + pDim + " (Type: '" + typeof pDim + "') Please use a Vec2 object");
 
-        //Trigger resize callbacks
+        //Loop through the the canvas obejcts
+        for (var i = 0; i < this.__Internal__Dont__Modify__.canvas.length; i++) {
+            //Set the canvas dimensions
+            this.__Internal__Dont__Modify__.canvas[i].width = pDim.x;
+            this.__Internal__Dont__Modify__.canvas[i].height = pDim.y;
+        }
+
+        //Trigger the resize callback events
         this.triggerResizeEvents();
     },
 
@@ -394,8 +222,9 @@ ExtendProperties(Graphics, {
         Graphics.width = userWidth;
     */
     set width(pWidth) {
-        //Change the size of the canvas
-        this.canvas.width = pWidth;
+        //Loop through all canvas obejcts and set the width
+        for (var i = 0; i < this.__Internal__Dont__Modify__.canvas.length; i++)
+            this.__Internal__Dont__Modify__.canvas[i].width = pWidth;
 
         //Trigger resize callbacks
         this.triggerResizeEvents();
@@ -428,8 +257,9 @@ ExtendProperties(Graphics, {
         Graphics.height = userHeight;
     */
     set height(pHeight) {
-        //Change the size of the canvas
-        this.canvas.height = pHeight;
+        //Loop through all canvas obejcts and set the height
+        for (var i = 0; i < this.__Internal__Dont__Modify__.canvas.length; i++)
+            this.__Internal__Dont__Modify__.canvas[i].height = pHeight;
 
         //Trigger resize callbacks
         this.triggerResizeEvents();
@@ -482,9 +312,96 @@ ExtendProperties(Graphics, {
 
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     /////                                                                                                            ////
-    /////                                               Main Functions                                               ////
+    /////                                             Rendering Functions                                            ////
     /////                                                                                                            ////
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    /*
+        Graphics : beginRender - Start the rendering with the passed in properties
+        30/11/2016
+
+        @param[in] pTranslateX - The X value to translate the drawing point to (Default 0)
+        @param[in] pTranslateY - The Y value to translate the drawing point to (Default 0)
+        @param[in] pRot - The amount of rotation (Radians) to apply to the rendering process (Default 0)
+        @param[in] pScaleX - The amount that the X dimension should be scaled by (Default 1)
+        @param[in] pScaleY - The amount that the Y dimension should be scaled by (Default 1)
+
+        Example:
+
+        //Render the player to the canvas
+        Graphics.beginRender(position.x, position.y, rotation, scale.x, scale.y);
+
+        //Draw player image
+        Graphics.draw.drawImage(...);
+    */
+    beginRender: function(pTranslateX, pTranslateY, pRot, pScaleX, pScaleY) {
+        //Create the new transform
+        var transform = createTransform(pTranslateX, pTranslateY, pRot, pScaleX, pScaleY);
+
+        //Check if there are other transforms in the stack
+        if (this.__Internal__Dont__Modify__.renderStack.length)
+            transform.set(this.__Internal__Dont__Modify__.renderStack[this.__Internal__Dont__Modify__.renderStack.length - 1].multi(transform));
+
+        //Apply the transform
+        this.transform = transform;
+
+        //Push the transform onto the render stack
+        this.__Internal__Dont__Modify__.renderStack.push(transform);
+    },
+
+    /*
+        Graphics : endRender - End the rendering process restoring the pre-render properties
+        30/11/2016
+
+        Example:
+
+        //Draw player image
+        Graphics.draw.drawImage(...);
+
+        //End the rendering
+        Graphics.endRender();
+    */
+    endRender: function() {
+        //Pop the current transform from the stack
+        this.__Internal__Dont__Modify__.renderStack.pop();
+
+        //Reset the previous transform if it exists
+        if (this.__Internal__Dont__Modify__.renderStack.length)
+            this.transform = this.__Internal__Dont__Modify__.renderStack[this.__Internal__Dont__Modify__.renderStack.length - 1];
+
+        //Otherwise reset the transform
+        else this.transform = null;
+    },
+
+    /*
+        Graphics : loadImage - Creates and loads an image from the specified file path
+                               if it does not already exist. Returns the previous instance
+                               if it does exist.
+        30/11/2016
+
+        @param[in] pFilePath - The filepath of the image to load (Relative to the HTML calling this)
+
+        @return Image Element - Returns a reference to an HTML Image element that has been
+                                added to the document and assigned the passed in image
+
+        Example:
+
+        //Load the player image
+        var playerImage = Graphics.loadImage("Sprites/player.png");
+    */
+    loadImage: function(pFilePath) {
+        //Check if the image has already been loaded
+        if (!(pFilePath in this.__Internal__Dont__Modify__.imageMap)) {
+            //Create a new Image object
+            this.__Internal__Dont__Modify__.imageMap[pFilePath] = new Image();
+
+            //Assign the source filepath
+            this.__Internal__Dont__Modify__.imageMap[pFilePath].src = pFilePath;
+        }
+
+        //Return the image object
+        return this.__Internal__Dont__Modify__.imageMap[pFilePath];
+    },
 
     /*
         Graphics : outlineText - Render text to a specified position with an outline
@@ -524,5 +441,151 @@ ExtendProperties(Graphics, {
 
         //Render main text
         this.draw.fillText(pText, pXPos, pYPos);
+    },
+
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /////                                                                                                            ////
+    /////                                               Resize Functions                                             ////
+    /////                                                                                                            ////
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    /*
+        Graphics : setWindowResizeCallback - Set the callback function for the window resize event
+        30/11/2016
+
+        @param[in] pCB - A function that takes in the new width and height of the viewable area (Or 
+                         null to remove the callback)
+
+        Example:
+
+        //Set the window resize callback
+        Graphics.setWindowResizeCallback(function(pWidth, pHeight) {
+            //TODO: React to the window resize
+        });
+    */
+    setWindowResizeCallback: function(pCB) {
+        //Check for null
+        if (pCB == null) {
+            this.__Internal__Dont__Modify__.windowResizeCallback = null;
+            return;
+        }
+
+        //Check the type
+        if (typeof pCB !== "function")
+            throw new Error("Can not set the Graphics window resize callback to " + pCB + " (Type: '" + typeof pCB + "') Please use a function that accepts the viewable width and height or null");
+
+        //Set the callback
+        this.__Internal__Dont__Modify__.windowResizeCallback = pCB;
+    },
+
+    /*
+        Graphics : addCanvasResizeEvent - Add a callback function to be called when the canvas is resized via
+                                          the Graphics object
+        30/11/2016
+
+        @param[in] pCB - A function that takes in the new width and height of the canvas
+
+        @return bool - Returns true if the callback was added to the event list
+
+        Example:
+
+        //Add a canvas resize callback
+        if (Graphics.addCanvasResizeEvent(resizeFunction)) {
+            //TODO: Output success message
+        }
+    */
+    addCanvasResizeEvent: function(pCB) {
+        //Check the type
+        if (typeof pCB !== "function")
+            throw new Error("Can not add a canvas resize event using " + pCB + " (Type: '" + typeof pCB + "') Please use a function that takes in the new width and height of the canvas");
+
+        //Check if the function already exists in the list
+        for (var i = 0; i < this.__Internal__Dont__Modify__.canvasResizeEvents.length; i++) {
+            //Check for a function match
+            if (this.__Internal__Dont__Modify__.canvasResizeEvents[i] === pCB) return false;
+        }
+
+        //Add the callback to the list
+        this.__Internal__Dont__Modify__.canvasResizeEvents.push(pCB);
+
+        //Return success
+        return true;
+    },
+
+    /*
+        Graphics : removeCanvasResizeEvent - Remove a callback function from the canvas resize events list
+        30/11/2016
+
+        @param[in] pCB - The function to remove from the callback list
+
+        @return bool - Returns true if the callback was removed from the list
+
+        Example:
+
+        //Remove the callback from the canvas resizing
+        if (Graphics.removeCanvasResizeEvent(resizeFunction)) {
+            //TODO: Output success message
+        }
+    */
+    removeCanvasResizeEvent: function(pCB) {
+        //Loop through the events list
+        for (var i = 0; i < this.__Internal__Dont__Modify__.canvasResizeEvents.length; i++) {
+            //Check for a function match
+            if (this.__Internal__Dont__Modify__.canvasResizeEvents[i] === pCB) {
+                //Remove the function from the list
+                this.__Internal__Dont__Modify__.canvasResizeEvents.splice(i, 1);
+
+                //Return success
+                return true;
+            }
+        }
+
+        //Default return failure
+        return false;
+    },
+
+    /*
+        Graphics : triggerResizeEvents - Go through and call all canvas resize event callbacks
+                                         (Called through size, width and height properties)
+        30/11/2016
+
+        Example:
+
+        //Force resize callbacks
+        Graphics.triggerResizeEvents();
+    */
+    triggerResizeEvents: function() {
+        //Loop through all resize events 
+        for (var i = 0; i < this.__Internal__Dont__Modify__.canvasResizeEvents.length; i++)
+            this.__Internal__Dont__Modify__.canvasResizeEvents[i](this.canvas.width, this.canvas.height);
+    },
+
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /////                                                                                                            ////
+    /////                                               Main Functions                                               ////
+    /////                                                                                                            ////
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    /*
+        Graphics : swapBuffers - Swap over the currently active render buffer
+        30/11/2016
+
+        Example:
+
+        //TODO: Render all obejcts for the frame
+
+        //Swap over the render buffers
+        Graphics.swapBuffers();
+    */
+    swapBuffers: function() {
+        //Store the index of the other buffer
+        var otherBuffer = (this.__Internal__Dont__Modify__.renderBufferIndex + 1) % this.__Internal__Dont__Modify__.canvas.length;
+
+        //Swap the visibility over
+        this.__Internal__Dont__Modify__.canvas[this.__Internal__Dont__Modify__.renderBufferIndex].style.visibility = "visible";
+        this.__Internal__Dont__Modify__.canvas[otherBuffer].style.visibility = "hidden";
+
+        //Save the new active render buffer
+        this.__Internal__Dont__Modify__.renderBufferIndex = otherBuffer;
     },
 });
