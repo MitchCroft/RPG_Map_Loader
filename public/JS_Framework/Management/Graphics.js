@@ -39,8 +39,8 @@
 */
 function Graphics(pWidth, pHeight, pResizeCallback) {
     /*  WARNING:
-        Don't modify this internal object from the outside of the Graphics.
-        Instead use camera properties and functions to modify these values
+        Don't modify this internal object from the outside of the Graphics object.
+        Instead use Graphics object properties and functions to modify these values
         as this allows for the internal information to update itself and keep it
         correct.
     */

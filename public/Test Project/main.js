@@ -36,12 +36,16 @@ Input.addAxis(ZOOM_AXIS);
 
 /*--------------------Rendering--------------------*/
 //Create the camera to view the environment
-var camera = new Camera(graphics.canvas, WORLD_VIEW_WIDTH, WORLD_VIEW_HEIGHT);
+var trackCam = new TrackingCamera(graphics.canvas, WORLD_VIEW_WIDTH, WORLD_VIEW_HEIGHT);
+
+//Set the tracking camera values
+trackCam.moveSpeed = 250;
+trackCam.maxDistance = 96;
 
 //Create the canvas resize event for resizing the camera
 graphics.addCanvasResizeEvent(function(pWidth, pHeight) {
     //Assign the new canvas size to the camera
-    camera.canvasDimensions = new Vec2(pWidth, pHeight);
+    trackCam.camera.canvasDimensions = new Vec2(pWidth, pHeight);
 });
 
 /*--------------------Map--------------------*/
@@ -54,34 +58,46 @@ var worldManager = new WorldManager(function(pFilePath) {
         //Switch on the type of the object
         switch (pObjLayer.objects[i].type) {
             case "Spawn":
+                //Create a new Entity Controller
+                var controller = new EntityController(new Entity());
+
+                //Set the Entity dimensions
+                controller.entity.width = controller.entity.height = ENTITY_DIM_SIZE;
+
                 //Check if the layer is for players
                 if (pObjLayer.name === "Player Layer") {
-                    //Set the player to this position
-                    player.position = new Vec2(pObjLayer.objects[i].x, pObjLayer.objects[i].y);
+                    //Load the player animator
+                    controller.entity.animator.loadAnimator("RPG_JS\/TestWorld\/Animators\/PlayerAnimator.json", function(pFilePath) {
+                        return graphics.loadImage(pFilePath);
+                    });
 
-                    //Move the camera to this position
-                    camera.position = player.position;
+                    //Set the player to this position
+                    controller.entity.position = new Vec2(pObjLayer.objects[i].x, pObjLayer.objects[i].y);
+
+                    //Set the player Entity as the target of the camera
+                    trackCam.target = controller.entity;
+
+                    //Move the tracking camera to this position
+                    trackCam.camera.position = controller.entity.position;
+
+                    //Assign the player input function
+                    controller.controlFunc = playerInput;
                 }
 
                 //If it is an NPC layer add a new NPC entity
                 else if (pObjLayer.name === "NPC Layer") {
-                    //Create a new Entity object
-                    var npc = new Entity();
-
                     //Load the animator
-                    npc.animator.loadAnimator("RPG_JS\/TestWorld\/Animators\/NPCAnimator.json", function(pFilePath) {
+                    controller.entity.animator.loadAnimator("RPG_JS\/TestWorld\/Animators\/NPCAnimator.json", function(pFilePath) {
                         return graphics.loadImage(pFilePath);
                     });
 
                     //Set the NPC's position
-                    npc.position = new Vec2(pObjLayer.objects[i].x, pObjLayer.objects[i].y);
-
-                    //Set the dimensions of the NPC
-                    npc.width = npc.height = ENTITY_DIM_SIZE;
-
-                    //Add the NPC to the list of Entity
-                    inSceneEntity.push(npc);
+                    controller.entity.position = new Vec2(pObjLayer.objects[i].x, pObjLayer.objects[i].y);
                 }
+
+                //Add the controller to the list
+                entityControllers.push(controller);
+
                 break;
             default:
                 console.log("Object layer " + pObjLayer.name + " logged the object " + pObjLayer.objects[i].name);
@@ -92,38 +108,84 @@ var worldManager = new WorldManager(function(pFilePath) {
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /////                                                                                                            ////
-/////                                         Update Loop Functionality                                          ////
+/////                                             Global Define Values                                           ////
 /////                                                                                                            ////
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-//Store the dimensions of the Entity
+//A constant size for the Entities on the map
 var ENTITY_DIM_SIZE = 30;
 
-//Create the player
-var player = new Entity();
+//Store the movement speed for the player
+var PLAYER_MOVE_SPEED = 200;
 
-//Set the players animator
-player.animator.loadAnimator("RPG_JS\/TestWorld\/Animators\/PlayerAnimator.json", function(pFilePath) {
-    return graphics.loadImage(pFilePath);
-});
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/////                                                                                                            ////
+/////                                        Entity Management Functionality                                     ////
+/////                                                                                                            ////
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-//Set the dimensions of the player
-player.width = player.height = ENTITY_DIM_SIZE;
+//Store an array of different Entity Controller objects active within the environment
+var entityControllers = [];
 
-//Store an array of Entity in the scene
-var inSceneEntity = [player];
+/*
+    entityCollisionCheck - Given a passed in Entity object and displacement Vec2 object, resolve the movement
+    01/12/2016
+
+    @param[in] pEntity - The Entity object to move by the displacement
+    @param[in] pDisp - A Vec2 object holding the displacement amount
+*/
+function entityCollisionCheck(pEntity, pDisp) {
+    //Check there is a displacement
+    if (!pDisp.sqrMag) return;
+
+    //Break the displacement up into seperate axis
+    var movementAxis = [new Vec2(pDisp.x, 0), new Vec2(0, pDisp.y)];
+
+    //Loop through the seperate axis
+    for (var i = 0; i < movementAxis.length; i++) {
+        //Check there is displacement on this axis
+        if (!movementAxis[i].sqrMag) continue;
+
+        //Test collision
+        if (!worldManager.testObjectCollision(pEntity.x + movementAxis[i].x, pEntity.y + movementAxis[i].y, pEntity.width, pEntity.height, "Collideable"))
+            pEntity.move(movementAxis[i]);
+    }
+};
+
+/*
+    playerInput - Test for user input and move the Entity accordingly
+    01/12/2016
+
+    @param[in] pDelta - The delta time for the current cycle
+*/
+function playerInput(pDelta) {
+    //Check if the world is transitioning between maps
+    if (worldManager.transitionProgress === 1) {
+        //Get the camera relative up direction
+        var camUp = new Vec2(0, -1).rotate(trackCam.camera.rotation * Math.deg2Rad);
+
+        //Get the movement direction
+        var moveDir = camUp.multi(Input.getAxis("vertical")).addSet(camUp.right.multiSet(Input.getAxis("horizontal")));
+
+        //Normalise movement if needed
+        if (moveDir.sqrMag > 1) moveDir.normalize();
+
+        //Move the vector out by the player movement speed
+        moveDir.multiSet(PLAYER_MOVE_SPEED * pDelta);
+
+        //Process the movement
+        entityCollisionCheck(this.entity, moveDir);
+    }
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/////                                                                                                            ////
+/////                                           Update Loop Functionality                                        ////
+/////                                                                                                            ////
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 //Store a flag for highlighting the collision layer
 var debugCollision = false;
-
-//Store the player moves speed
-var PLAYER_MOVE_SPEED = 200;
-
-//Store the speed with which the camera lerps to the player
-var CAMERA_MOVE_SPEED = 250;
-
-//Store the minimum distance away the camera can be
-var CAMERA_MAX_DISTANCE = 96;
 
 /*
     updateLoop - Update the input and display the loaded game world
@@ -139,7 +201,7 @@ function updateLoop(pDelta) {
     worldManager.update(pDelta);
 
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    ////-----------------------------------------Update Player & Camera---------------------------------------////
+    ////-----------------------------------------Update Entity & Camera---------------------------------------////
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     //Check for collision layer highlighting input options
@@ -151,53 +213,12 @@ function updateLoop(pDelta) {
         worldManager.highlightLayers = (debugCollision ? "Collideable" : null);
     }
 
-    //Get the transition progress of the World Manager
-    var transProg = worldManager.transitionProgress;
+    //Update the entity controllers
+    for (var i = 0; i < entityControllers.length; i++)
+        entityControllers[i].update(pDelta);
 
-    //Disable player movement while the level hasn't loaded
-    if (transProg === 1) {
-        //Get the camera relative up direction
-        var camUp = new Vec2(0, -1).rotate(camera.rotation * Math.deg2Rad);
-
-        //Get the movement direction
-        var moveDir = camUp.multi(Input.getAxis("vertical")).addSet(camUp.right.multiSet(Input.getAxis("horizontal")));
-
-        //Normalise movement if needed
-        if (moveDir.sqrMag > 1) moveDir.normalize();
-
-        //Move the vector out by the player movement speed
-        moveDir.multiSet(PLAYER_MOVE_SPEED * pDelta);
-
-        //Store the movement values to check into an array
-        var movementAxis = [new Vec2(moveDir.x, 0), new Vec2(0, moveDir.y)];
-
-        //Loop through collision areas to check
-        for (var i = 0; i < movementAxis.length; i++) {
-            //Check if there is any displacement on the axis
-            if (!movementAxis[i].sqrMag) continue;
-
-            //Test collision for the movement values
-            if (!worldManager.testObjectCollision(player.x + movementAxis[i].x, player.y + movementAxis[i].y, player.width, player.height, "Collideable"))
-                player.move(movementAxis[i]);
-        }
-    }
-
-    //Update the player animator
-    for (var i = 0; i < inSceneEntity.length; i++)
-        inSceneEntity[i].update(pDelta);
-
-    //Get the vector to the player
-    var camSeperationVec = player.position.subtract(camera.position);
-
-    //Get the cameras distance scale
-    var moveScale = Math.clamp01(camSeperationVec.mag / CAMERA_MAX_DISTANCE);
-
-    //Move the camera towards the players position
-    camera.position = camera.position.addSet(camSeperationVec.normalize().multi(CAMERA_MOVE_SPEED * moveScale * pDelta));
-
-    //Apply camera input effects
-    camera.distance = Input.getAxis("zoom") * 4 + 1;
-    camera.rotation = Input.getAxis("rotate") * 11.25;
+    //Update the camera 
+    trackCam.update(pDelta);
 
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ////-------------------------------------------Clear Background-------------------------------------------////
@@ -215,27 +236,30 @@ function updateLoop(pDelta) {
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     //Get the projection view matrix
-    var projView = camera.projectionView;
+    var projView = trackCam.camera.projectionView;
 
     //Render the background
-    worldManager.draw(graphics.draw, camera, ["Base", 1, 2]);
+    worldManager.draw(graphics.draw, trackCam.camera, ["Base", 1, 2]);
 
     //Set the projection view matrix
     graphics.transform = projView;
 
-    //Draw the characters
-    for (var i = 0; i < inSceneEntity.length; i++)
-        inSceneEntity[i].draw(graphics.draw);
+    //Draw the Entity
+    for (var i = 0; i < entityControllers.length; i++)
+        entityControllers[i].draw(graphics.draw);
 
     //Render the foreground
-    worldManager.draw(graphics.draw, camera, "Foreground");
+    worldManager.draw(graphics.draw, trackCam.camera, "Foreground");
 
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ////-------------------------------------------Draw UI Elements-------------------------------------------////
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     //Apply the UI transform
-    graphics.transform = camera.projectionUI;
+    graphics.transform = trackCam.camera.projectionUI;
+
+    //Get the transition progress of the World Manager
+    var transProg = worldManager.transitionProgress;
 
     //Check if the map is transitioning 
     if (transProg !== 1) {

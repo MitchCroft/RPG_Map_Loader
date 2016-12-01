@@ -26,7 +26,7 @@
 function Entity() {
     /*  WARNING:
         Don't modify this internal object from the outside of the Entity.
-        Instead use camera properties and functions to modify these values
+        Instead use Entity properties and functions to modify these values
         as this allows for the internal information to update itself and keep it
         correct.
     */

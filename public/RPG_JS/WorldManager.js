@@ -58,7 +58,7 @@ var TransitionState = { COMPLETED: 0, EXITING: 1, WAITING: 2, ENTERING: 3 };
 function WorldManager(pImgCB, pObjCB) {
     /*  WARNING:
         Don't modify this internal object from the outside of the WorldManager.
-        Instead use camera properties and functions to modify these values
+        Instead use WorldManager properties and functions to modify these values
         as this allows for the internal information to update itself and keep it
         correct.
     */
